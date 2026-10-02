@@ -1,0 +1,41 @@
+<resources>
+    <string name="app_name">Taptix – Auto Clicker</string>
+    <string name="accessibility_service_name">Taptix Auto Clicker Engine</string>
+    <string name="accessibility_service_description">Provides automated screen touch and gesture capabilities to assist drivers in accepting trip requests hands-free.</string>
+
+    <!-- Permissions -->
+    <string name="permission_accessibility_title">Accessibility Service</string>
+    <string name="permission_accessibility_desc">Required to simulate taps and analyze screen text for Smart Accept.</string>
+    <string name="permission_overlay_title">Display Over Other Apps</string>
+    <string name="permission_overlay_desc">Required to display the floating driver control toolbar over ride-hailing apps.</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="permission_granted">Active &amp; Ready</string>
+    <string name="permission_missing">Permission Required</string>
+
+    <!-- Overlay & Service Controls -->
+    <string name="start_floating_control">Start Floating Toolbar</string>
+    <string name="stop_floating_control">Stop Floating Toolbar</string>
+    <string name="emergency_stop">EMERGENCY STOP</string>
+    <string name="service_running_notification">Taptix Driver Assistant Active</string>
+    <string name="notification_channel_name">Taptix Driver Service</string>
+    <string name="notification_channel_desc">Shows active status and quick controls for floating driver toolbar.</string>
+
+    <!-- Operating Modes -->
+    <string name="mode_single_target">Single Target</string>
+    <string name="mode_multi_target">Multi Target</string>
+    <string name="mode_smart_accept">Smart Accept (OCR)</string>
+
+    <!-- Presets -->
+    <string name="preset_uber">Uber Driver</string>
+    <string name="preset_ola">Ola Driver</string>
+    <string name="preset_rapido">Rapido Captain</string>
+    <string name="preset_lyft">Lyft Driver</string>
+    <string name="preset_custom">Custom App</string>
+
+    <!-- Audio Announcements -->
+    <string name="tts_service_started">Taptix Auto Clicker Started</string>
+    <string name="tts_ride_accepted">Ride Request Accepted!</string>
+    <string name="tts_service_paused">Auto clicker paused</string>
+    <string name="tts_emergency_stop">Emergency stop triggered. All clicks stopped.</string>
+    <string name="tts_motion_lock">Vehicle motion detected. Safety lock activated.</string>
+</resources>
