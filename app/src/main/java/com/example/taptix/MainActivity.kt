@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,11 +37,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -48,6 +52,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -67,6 +72,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -82,6 +88,15 @@ import com.example.taptix.service.OverlayService
 import com.example.taptix.ui.theme.TaptixTheme
 import com.example.taptix.util.UpdateInfo
 import com.example.taptix.util.UpdateManager
+
+// Driver-First Color System Tokens
+val BrandCyan = Color(0xFF00E5FF)
+val BrandGreen = Color(0xFF00E676)
+val BrandAmber = Color(0xFFFFC107)
+val DarkBase = Color(0xFF121214)
+val DarkSurface = Color(0xFF1E1E24)
+val DarkControl = Color(0xFF2A2B32)
+val TextMuted = Color(0xFFA0AEC0)
 
 class MainActivity : ComponentActivity() {
 
@@ -119,6 +134,10 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
     // Floating Overlay Active State
     var isOverlayRunning by remember { mutableStateOf(OverlayService.instance != null) }
 
+    // Info Dialog Tooltip State
+    var infoDialogTitle by remember { mutableStateOf<String?>(null) }
+    var infoDialogContent by remember { mutableStateOf<String?>(null) }
+
     // Re-check permissions and updates on resume
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -132,7 +151,6 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                     if (info != null) {
                         availableUpdate = info
                     } else {
-                        // Fallback to local server if on same network
                         updateManager.checkForUpdate("http://192.168.29.97:8080/version.json") { localInfo ->
                             availableUpdate = localInfo
                         }
@@ -146,57 +164,115 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
         }
     }
 
+    // Modal Info Dialog
+    if (infoDialogTitle != null && infoDialogContent != null) {
+        AlertDialog(
+            onDismissRequest = {
+                infoDialogTitle = null
+                infoDialogContent = null
+            },
+            title = {
+                Text(text = infoDialogTitle!!, fontWeight = FontWeight.Bold, color = Color.White)
+            },
+            text = {
+                Text(text = infoDialogContent!!, fontSize = 14.sp, color = Color(0xFFCBD5E1), lineHeight = 20.sp)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    infoDialogTitle = null
+                    infoDialogContent = null
+                }) {
+                    Text("Got It", fontWeight = FontWeight.Bold, color = BrandCyan)
+                }
+            },
+            containerColor = DarkSurface,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.app_logo),
-                            contentDescription = "Taptix Logo",
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(1.dp, Color(0xFF00D2FF).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = painterResource(id = R.drawable.app_logo),
+                                contentDescription = "Taptix Logo",
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(1.dp, BrandCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "TAPTIX",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 19.sp,
+                                        letterSpacing = 0.5.sp,
+                                        color = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = BrandCyan.copy(alpha = 0.15f),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, BrandCyan.copy(alpha = 0.3f))
+                                    ) {
+                                        Text(
+                                            text = "PRO v1.2",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = BrandCyan,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
                                 Text(
-                                    text = "Taptix",
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 20.sp,
+                                    text = "Glanceable Driver Assistant",
+                                    fontSize = 11.sp,
+                                    color = TextMuted
+                                )
+                            }
+                        }
+
+                        // Top GPS Sync Pill
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = DarkControl,
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = BrandGreen,
+                                    modifier = Modifier.size(7.dp)
+                                ) {}
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "GPS SYNC",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFF00D2FF).copy(alpha = 0.2f),
-                                    modifier = Modifier.padding(top = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "PRO v1.1",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF00D2FF),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
                             }
-                            Text(
-                                text = "Ride-Hailing Driver Assistant",
-                                fontSize = 11.sp,
-                                color = Color(0xFFA0AEC0)
-                            )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0B101B)
+                    containerColor = Color(0xFF0E0E10)
                 )
             )
         },
-        containerColor = Color(0xFF080C14)
+        containerColor = DarkBase
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -229,15 +305,15 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                 )
             }
 
-            // 2. Interactive Status Card (ACTIVE / INACTIVE)
-            InteractiveMasterStatusCard(
+            // 2. Top-Anchored Dynamic Status Banner (Semantic Amber / Green)
+            ErgonomicStatusBanner(
                 isAccessibilityActive = isAccessibilityEnabled,
                 isOverlayGranted = isOverlayPermissionGranted,
-                onOpenAccessibilitySettings = {
+                onGrantAccessibility = {
                     val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                     context.startActivity(intent)
                 },
-                onOpenOverlaySettings = {
+                onGrantOverlay = {
                     val intent = Intent(
                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:${context.packageName}")
@@ -246,8 +322,8 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                 }
             )
 
-            // 3. Floating Overlay Service Control Card
-            FloatingOverlayMasterControlCard(
+            // 3. Oversized 56dp Floating Overlay Launcher Button Card
+            OversizedMasterControlCard(
                 isReady = isAccessibilityEnabled && isOverlayPermissionGranted,
                 isOverlayRunning = isOverlayRunning,
                 onToggleOverlay = {
@@ -263,48 +339,64 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                 }
             )
 
-            // 4. Floating Action Preview Section (Interactive Mockup)
-            FloatingActionPreviewCard(
+            // 4. Glassmorphic Live Draggable Overlay Preview Canvas
+            GlassmorphicPreviewCard(
                 operatingMode = appSettings.operatingMode,
                 preset = appSettings.platformPreset,
                 dimIntensity = appSettings.nightModeDimIntensity,
                 isNightModeActive = appSettings.nightModeAutoDimEnabled
             )
 
-            // 5. Operating Mode Card (Smart Accept OCR, Single, Multi)
-            ModernOperatingModeCard(
+            // 5. Branded Driver App Package Selector (Interactive Grid Cards)
+            BrandedAppPackageSelectorCard(
+                targetPackages = appSettings.targetAppPackages,
+                autoLaunchEnabled = appSettings.autoLaunchForTargetAppsEnabled,
+                onToggleAutoLaunch = { enabled ->
+                    prefsRepo.saveAutoLaunchForTargetAppsEnabled(enabled)
+                    appSettings = prefsRepo.getSettings()
+                },
+                onPackagesUpdated = { newPackages ->
+                    prefsRepo.saveTargetAppPackages(newPackages)
+                    appSettings = prefsRepo.getSettings()
+                },
+                onShowInfo = {
+                    infoDialogTitle = "Auto-Launch Driver Apps"
+                    infoDialogContent = "When you open any of your enabled driver apps (Uber, Lyft, Ola, Rapido, etc.), Taptix automatically pops up the floating heads-up assistant over the screen hands-free."
+                }
+            )
+
+            // 6. Detection Strategy Selection (Rich Vector Visual Cards)
+            DetectionStrategyVisualCards(
                 currentMode = appSettings.operatingMode,
                 onModeSelected = { mode ->
                     prefsRepo.saveOperatingMode(mode)
                     appSettings = prefsRepo.getSettings()
-                }
-            )
-
-            // 6. Platform Preset Selector (Uber, Ola, Rapido, Lyft, Custom)
-            ModernPlatformPresetCard(
-                currentPreset = appSettings.platformPreset,
-                customKeywords = appSettings.customKeywords,
-                onPresetSelected = { preset ->
-                    prefsRepo.savePlatformPreset(preset)
-                    appSettings = prefsRepo.getSettings()
                 },
-                onCustomKeywordsChanged = { keywords ->
-                    prefsRepo.saveCustomKeywords(keywords)
+                onShowInfo = {
+                    infoDialogTitle = "Detection Strategies"
+                    infoDialogContent = "• Smart Accept (OCR AI): Reads the screen in real time and automatically taps or swipes incoming ride offers.\n\n• Single Target: Repeatedly taps a fixed point marked by the driver.\n\n• Multi-Target: Sequentially taps multiple marked locations."
+                }
+            )
+
+            // 7. Standardized Range Slider (Touch Pulse Speed)
+            StandardizedSliderCard(
+                title = "SPEED & PULSE INTERVAL",
+                subtitle = "Touch pulse frequency for automated taps",
+                currentVal = appSettings.clickIntervalMs.toFloat(),
+                minVal = 50f,
+                maxVal = 1000f,
+                valueFormat = "${appSettings.clickIntervalMs} ms",
+                minScaleLabel = "50 ms (Fast)",
+                maxScaleLabel = "1000 ms (Standard)",
+                accentColor = BrandCyan,
+                onValueChange = { newVal ->
+                    prefsRepo.saveClickInterval(newVal.toLong())
                     appSettings = prefsRepo.getSettings()
                 }
             )
 
-            // 7. Click Speed & Timing Config
-            ModernClickSpeedCard(
-                intervalMs = appSettings.clickIntervalMs,
-                onIntervalChanged = { interval ->
-                    prefsRepo.saveClickInterval(interval)
-                    appSettings = prefsRepo.getSettings()
-                }
-            )
-
-            // 8. Driver Safety & Automation Card (Keyboard Auto-Pause, Motion Lock, Voice)
-            ModernSafetyAutomationCard(
+            // 8. Driver Safety & Automation Card (Streamlined 1-Line Taglines)
+            ErgonomicSafetyAutomationCard(
                 settings = appSettings,
                 onAutoPauseAcceptChanged = { enabled ->
                     prefsRepo.saveAutoPauseOnAccept(enabled)
@@ -325,11 +417,15 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                 onTtsChanged = { enabled ->
                     prefsRepo.saveTtsFeedbackEnabled(enabled)
                     appSettings = prefsRepo.getSettings()
+                },
+                onShowInfo = { title, desc ->
+                    infoDialogTitle = title
+                    infoDialogContent = desc
                 }
             )
 
-            // 9. Night Mode & OLED Protection Card with Intensity Slider
-            ModernNightModeBurnInCard(
+            // 9. Night-Mode & Screen Health (With Standardized Intensity Slider)
+            ErgonomicNightModeCard(
                 settings = appSettings,
                 onNightModeDimChanged = { enabled ->
                     prefsRepo.saveNightModeAutoDimEnabled(enabled)
@@ -346,19 +442,10 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                 onPixelShiftChanged = { enabled ->
                     prefsRepo.savePixelShiftBurnInProtection(enabled)
                     appSettings = prefsRepo.getSettings()
-                }
-            )
-
-            // 10. App-Specific Auto-Launch Card
-            ModernAutoLaunchCard(
-                settings = appSettings,
-                onAutoLaunchChanged = { enabled ->
-                    prefsRepo.saveAutoLaunchForTargetAppsEnabled(enabled)
-                    appSettings = prefsRepo.getSettings()
                 },
-                onTargetPackagesChanged = { packages ->
-                    prefsRepo.saveTargetAppPackages(packages)
-                    appSettings = prefsRepo.getSettings()
+                onShowInfo = {
+                    infoDialogTitle = "Night Mode & OLED Screen Health"
+                    infoDialogContent = "Auto-dimming reduces the brightness of floating widgets when idle, preventing blinding cabin glare at night. OLED Pixel-Shift subtly moves UI elements by 2 pixels to completely prevent permanent screen burn-in during long shifts."
                 }
             )
 
@@ -368,167 +455,26 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
 }
 
 // ==========================================
-// 1. Interactive Master Status Card
+// 1. Ergonomic Top-Anchored Status Banner
 // ==========================================
 @Composable
-fun InteractiveMasterStatusCard(
+fun ErgonomicStatusBanner(
     isAccessibilityActive: Boolean,
     isOverlayGranted: Boolean,
-    onOpenAccessibilitySettings: () -> Unit,
-    onOpenOverlaySettings: () -> Unit
+    onGrantAccessibility: () -> Unit,
+    onGrantOverlay: () -> Unit
 ) {
     val isSystemFullyActive = isAccessibilityActive && isOverlayGranted
 
-    val cardBorderColor by animateColorAsState(
-        if (isSystemFullyActive) Color(0xFF00E676) else if (!isAccessibilityActive) Color(0xFFFF5252) else Color(0xFFFFB800),
-        label = "statusBorder"
-    )
+    val bannerBorder = if (isSystemFullyActive) BrandGreen else BrandAmber
+    val bannerBg = DarkSurface
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, cardBorderColor.copy(alpha = 0.6f), RoundedCornerShape(20.dp)),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101624))
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "SYSTEM ENGINE STATUS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFA0AEC0),
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (isSystemFullyActive) "SERVICE ACTIVE" else "SERVICE INACTIVE",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black,
-                        color = if (isSystemFullyActive) Color(0xFF00E676) else Color(0xFFFF5252)
-                    )
-                }
-
-                // Active Indicator Glowing Pulse Badge
-                Surface(
-                    shape = CircleShape,
-                    color = if (isSystemFullyActive) Color(0xFF00E676).copy(alpha = 0.15f) else Color(0xFFFF5252).copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(
-                        2.dp,
-                        if (isSystemFullyActive) Color(0xFF00E676) else Color(0xFFFF5252)
-                    ),
-                    modifier = Modifier.size(46.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isSystemFullyActive) Color(0xFF00E676) else Color(0xFFFF5252),
-                            modifier = Modifier.size(16.dp)
-                        ) {}
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = if (isSystemFullyActive)
-                    "Taptix is armed and running. Auto-Accept gestures and floating controls are active."
-                else if (!isAccessibilityActive)
-                    "Accessibility Service is turned off. Taptix needs accessibility permission to detect ride offers and auto-accept hands-free."
-                else
-                    "Display Over Apps permission is missing. Needed to show floating control bar over Uber, Ola, or Maps.",
-                fontSize = 13.sp,
-                color = Color(0xFFCBD5E1),
-                lineHeight = 18.sp
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Action Buttons
-            if (!isAccessibilityActive) {
-                Button(
-                    onClick = onOpenAccessibilitySettings,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
-                ) {
-                    Text(
-                        text = "⚙️ Enable Accessibility Service in Settings",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = Color.White
-                    )
-                }
-            }
-
-            if (!isOverlayGranted) {
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = onOpenOverlaySettings,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFB800))
-                ) {
-                    Text(
-                        text = "🔓 Grant Display Over Other Apps Permission",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-
-            // Quick Status Indicators
-            Spacer(modifier = Modifier.height(14.dp))
-            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                StatusPill(label = "Accessibility", active = isAccessibilityActive)
-                StatusPill(label = "Overlay Window", active = isOverlayGranted)
-                StatusPill(label = "Voice Engine", active = true)
-            }
-        }
-    }
-}
-
-@Composable
-fun StatusPill(label: String, active: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Surface(
-            shape = CircleShape,
-            color = if (active) Color(0xFF00E676) else Color(0xFFFF5252),
-            modifier = Modifier.size(8.dp)
-        ) {}
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = "$label: ${if (active) "Ready" else "Off"}",
-            fontSize = 11.sp,
-            color = if (active) Color(0xFFE2E8F0) else Color(0xFFA0AEC0)
-        )
-    }
-}
-
-// ==========================================
-// 2. Floating Overlay Master Control Card
-// ==========================================
-@Composable
-fun FloatingOverlayMasterControlCard(
-    isReady: Boolean,
-    isOverlayRunning: Boolean,
-    onToggleOverlay: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF131C2E))
+            .border(1.dp, bannerBorder.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = bannerBg)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(
@@ -538,51 +484,197 @@ fun FloatingOverlayMasterControlCard(
             ) {
                 Column {
                     Text(
-                        text = "FLOATING OVERLAY WIDGET",
+                        text = "ENGINE STATUS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF00D2FF),
+                        color = TextMuted,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isSystemFullyActive) BrandGreen else BrandAmber,
+                            modifier = Modifier.size(10.dp)
+                        ) {}
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isSystemFullyActive) "SERVICE ARMED & ACTIVE" else "PERMISSIONS REQUIRED",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Black,
+                            color = if (isSystemFullyActive) BrandGreen else BrandAmber
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isSystemFullyActive) BrandGreen.copy(alpha = 0.15f) else BrandAmber.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isSystemFullyActive) BrandGreen.copy(alpha = 0.3f) else BrandAmber.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = if (isSystemFullyActive) "READY" else "ACTION",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isSystemFullyActive) BrandGreen else BrandAmber,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = if (isSystemFullyActive)
+                    "Real-time ride detection and smart auto-swipe are armed."
+                else
+                    "Grant required system permissions to enable hands-free auto-acceptance.",
+                fontSize = 13.sp,
+                color = Color(0xFFCBD5E1)
+            )
+
+            // Direct 1-Tap Action Buttons
+            if (!isAccessibilityActive) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Button(
+                    onClick = onGrantAccessibility,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandAmber)
+                ) {
+                    Text(
+                        text = "⚙️ Grant Accessibility Service",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color.Black
+                    )
+                }
+            }
+
+            if (!isOverlayGranted) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onGrantOverlay,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, BrandCyan),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandCyan)
+                ) {
+                    Text(
+                        text = "🔓 Grant Display Over Other Apps",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
+            // Quick Status Pills
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                PillIndicator(name = "Accessibility", active = isAccessibilityActive)
+                PillIndicator(name = "Overlay Window", active = isOverlayGranted)
+                PillIndicator(name = "Voice Mic", active = true)
+            }
+        }
+    }
+}
+
+@Composable
+fun PillIndicator(name: String, active: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(
+            shape = CircleShape,
+            color = if (active) BrandGreen else BrandAmber,
+            modifier = Modifier.size(7.dp)
+        ) {}
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "$name: ${if (active) "Active" else "Missing"}",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (active) Color(0xFFE2E8F0) else TextMuted
+        )
+    }
+}
+
+// ==========================================
+// 2. Oversized 56dp Master Control Button Card
+// ==========================================
+@Composable
+fun OversizedMasterControlCard(
+    isReady: Boolean,
+    isOverlayRunning: Boolean,
+    onToggleOverlay: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "FLOATING CONTROLS DOCK",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandCyan,
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = if (isOverlayRunning) "Widget is Floating on Screen" else "Widget Stopped",
-                        fontSize = 16.sp,
+                        text = if (isOverlayRunning) "Heads-Up Display Active" else "Heads-Up Display Idle",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isOverlayRunning) Color(0xFF00E676).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.08f)
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isOverlayRunning) BrandGreen.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.06f)
                 ) {
                     Text(
-                        text = if (isOverlayRunning) "LIVE" else "IDLE",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Black,
-                        color = if (isOverlayRunning) Color(0xFF00E676) else Color(0xFFA0AEC0),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        text = if (isOverlayRunning) "LIVE" else "STOPPED",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isOverlayRunning) BrandGreen else TextMuted,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            // Oversized 56dp Touch Target
             Button(
                 onClick = onToggleOverlay,
                 enabled = isReady,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .height(56.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isOverlayRunning) Color(0xFFE53935) else Color(0xFF00D2FF)
+                    containerColor = if (isOverlayRunning) Color(0xFFE53935) else BrandCyan
                 )
             ) {
                 Text(
-                    text = if (isOverlayRunning) "🛑 Stop Floating Overlay" else "🚀 Start Floating Overlay",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    text = if (isOverlayRunning) "🛑 STOP FLOATING OVERLAY" else "🚀 LAUNCH FLOATING CONTROLS",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
                     color = if (isOverlayRunning) Color.White else Color.Black
                 )
             }
@@ -591,10 +683,10 @@ fun FloatingOverlayMasterControlCard(
 }
 
 // ==========================================
-// 3. Floating Action Preview Section (Interactive Mockup)
+// 3. Glassmorphic Live Draggable Overlay Preview
 // ==========================================
 @Composable
-fun FloatingActionPreviewCard(
+fun GlassmorphicPreviewCard(
     operatingMode: OperatingMode,
     preset: PlatformPreset,
     dimIntensity: Float,
@@ -604,8 +696,9 @@ fun FloatingActionPreviewCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1422))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(
@@ -615,14 +708,14 @@ fun FloatingActionPreviewCard(
             ) {
                 Column {
                     Text(
-                        text = "FLOATING OVERLAY PREVIEW",
+                        text = "OVERLAY LIVE PREVIEW",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF00D2FF),
+                        color = BrandCyan,
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "Live On-Screen Widget Appearance",
+                        text = "On-Screen Widget Demonstration",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -631,117 +724,123 @@ fun FloatingActionPreviewCard(
 
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFFFB800).copy(alpha = 0.2f)
+                    color = BrandAmber.copy(alpha = 0.15f)
                 ) {
                     Text(
-                        text = "INTERACTIVE",
+                        text = "DRIVE MODE",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFFB800),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        color = BrandAmber,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Simulated Navigation Screen Background with Floating Widget
+            // Glassmorphic Map Container
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(210.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color(0xFF141923), Color(0xFF090D14))
+                            listOf(Color(0xFF161820), Color(0xFF0C0E14))
                         )
                     )
-                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(14.dp))
                     .padding(12.dp)
             ) {
-                // Background Simulated Map Lines
+                // Background Simulated Map Roads
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-                    Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.05f)))
-                    Spacer(modifier = Modifier.height(40.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.05f)))
-                    Spacer(modifier = Modifier.height(40.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.05f)))
+                    Box(modifier = Modifier.fillMaxWidth().height(1.5.dp).background(Color.White.copy(alpha = 0.05f)))
+                    Spacer(modifier = Modifier.height(45.dp))
+                    Box(modifier = Modifier.fillMaxWidth().height(1.5.dp).background(Color.White.copy(alpha = 0.05f)))
+                    Spacer(modifier = Modifier.height(45.dp))
+                    Box(modifier = Modifier.fillMaxWidth().height(1.5.dp).background(Color.White.copy(alpha = 0.05f)))
                 }
 
-                // Miniature Floating Controller Pill
+                // Miniature Draggable Floating Widget
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Top Miniature Floating Bar
+                    // Floating Controller Pill (Horizontal status only, no vertical text)
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color(0xFF1E2638).copy(alpha = if (isNightModeActive) (dimIntensity * 1.5f).coerceIn(0.4f, 1f) else 1f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00D2FF).copy(alpha = 0.4f)),
-                        modifier = Modifier.shadow(8.dp, RoundedCornerShape(20.dp))
+                        shape = RoundedCornerShape(24.dp),
+                        color = DarkControl.copy(alpha = if (isNightModeActive) (dimIntensity * 1.5f).coerceIn(0.4f, 1f) else 1f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BrandCyan.copy(alpha = 0.4f)),
+                        modifier = Modifier.shadow(8.dp, RoundedCornerShape(24.dp))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "::: TAPTIX",
-                                fontSize = 10.sp,
+                                text = ":::",
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
-                                color = Color(0xFFA0AEC0)
+                                color = TextMuted
                             )
 
                             // Interactive Mini Play Button
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (previewPlaying) Color(0xFF00E676) else Color(0xFFFF5252),
+                                shape = CircleShape,
+                                color = if (previewPlaying) BrandGreen else Color(0xFFFF5252),
                                 modifier = Modifier
                                     .clickable { previewPlaying = !previewPlaying }
-                                    .padding(vertical = 1.dp)
+                                    .size(24.dp)
                             ) {
-                                Text(
-                                    text = if (previewPlaying) " ▶ ON " else " ⏸ OFF ",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = if (previewPlaying) "▶" else "⏸",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Black
+                                    )
+                                }
                             }
 
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFF2D3748)
+                                color = DarkBase
                             ) {
                                 Text(
-                                    text = preset.title.split(" ").first().uppercase(),
-                                    fontSize = 9.sp,
+                                    text = "SMART ACCEPT",
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFB800),
+                                    color = Color.White,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
 
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFF2D3748)
+                                color = BrandAmber.copy(alpha = 0.2f)
                             ) {
                                 Text(
-                                    text = "🎙️ MIC",
+                                    text = preset.title.split(" ").first().uppercase(),
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF00D2FF),
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    color = BrandAmber,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
+
+                            Text(
+                                text = "🎙️",
+                                fontSize = 11.sp
+                            )
                         }
                     }
 
                     // Bottom Simulated Real-Time Ride Offer Card
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF182236).copy(alpha = 0.95f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFB800).copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(12.dp),
+                        color = DarkControl.copy(alpha = 0.95f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BrandAmber.copy(alpha = 0.4f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
@@ -752,43 +851,43 @@ fun FloatingActionPreviewCard(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFFFB800)
+                                    color = BrandAmber
                                 ) {
                                     Text(
-                                        text = "NEW TRIP OFFER",
+                                        text = "OFFER DETECTED",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Black,
                                         color = Color.Black,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                                     )
                                 }
                                 Text(
-                                    text = "$18.50 • 3.8 mi (9 min)",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF00E676)
+                                    text = "$24.50 • 4.2 mi",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = BrandGreen
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Downtown Station ➔ Terminal 2 Airport",
+                                text = "Terminal 3 Airport ➔ Grand Central",
                                 fontSize = 11.sp,
-                                color = Color(0xFFE2E8F0),
-                                fontWeight = FontWeight.SemiBold
+                                color = Color(0xFFCBD5E1),
+                                fontWeight = FontWeight.Medium
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFF00E676),
+                                color = BrandGreen,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
                                     text = if (preset.requiresSwipe) "AUTO-SWIPING TO ACCEPT ➔" else "AUTO-CLICKING TO ACCEPT ✓",
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Black,
                                     color = Color.Black,
                                     modifier = Modifier.padding(vertical = 4.dp),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
@@ -800,181 +899,32 @@ fun FloatingActionPreviewCard(
 }
 
 // ==========================================
-// 4. Operating Mode Card
+// 4. Branded Driver App Package Selector (Interactive Cards)
 // ==========================================
+data class DriverAppItem(val name: String, val badge: String, val packageId: String, val badgeColor: Color)
+
 @Composable
-fun ModernOperatingModeCard(
-    currentMode: OperatingMode,
-    onModeSelected: (OperatingMode) -> Unit
+fun BrandedAppPackageSelectorCard(
+    targetPackages: String,
+    autoLaunchEnabled: Boolean,
+    onToggleAutoLaunch: (Boolean) -> Unit,
+    onPackagesUpdated: (String) -> Unit,
+    onShowInfo: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101624))
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                text = "CLICKING ENGINE MODE",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF00D2FF),
-                letterSpacing = 1.sp
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Select Detection Strategy",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            OperatingMode.entries.forEach { mode ->
-                val isSelected = (mode == currentMode)
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) Color(0xFF00D2FF).copy(alpha = 0.15f) else Color(0xFF171F30),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (isSelected) Color(0xFF00D2FF) else Color.White.copy(alpha = 0.08f)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable { onModeSelected(mode) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { onModeSelected(mode) }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = mode.displayName,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Color(0xFF00D2FF) else Color.White,
-                                    fontSize = 14.sp
-                                )
-                                if (mode == OperatingMode.SMART_ACCEPT) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = Color(0xFF00E676).copy(alpha = 0.2f)
-                                    ) {
-                                        Text(
-                                            text = "RECOMMENDED",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF00E676),
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            Text(
-                                text = mode.description,
-                                fontSize = 12.sp,
-                                color = Color(0xFFA0AEC0)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// 5. Platform Preset Selector Card
-// ==========================================
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ModernPlatformPresetCard(
-    currentPreset: PlatformPreset,
-    customKeywords: String,
-    onPresetSelected: (PlatformPreset) -> Unit,
-    onCustomKeywordsChanged: (String) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101624))
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                text = "DRIVER APP PLATFORM",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF00D2FF),
-                letterSpacing = 1.sp
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Optimized Touch & Swipe Strategy",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                PlatformPreset.entries.forEach { preset ->
-                    val isSelected = (preset == currentPreset)
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onPresetSelected(preset) },
-                        label = {
-                            Text(
-                                text = preset.title.split(" ").first(),
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFF00D2FF),
-                            selectedLabelColor = Color.Black
-                        )
-                    )
-                }
-            }
-
-            if (currentPreset == PlatformPreset.CUSTOM) {
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = customKeywords,
-                    onValueChange = onCustomKeywordsChanged,
-                    label = { Text("Custom OCR Keywords (comma separated)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-            }
-        }
-    }
-}
-
-// ==========================================
-// 6. Click Speed & Delay Card
-// ==========================================
-@Composable
-fun ModernClickSpeedCard(
-    intervalMs: Long,
-    onIntervalChanged: (Long) -> Unit
-) {
-    var sliderVal by remember(intervalMs) { mutableFloatStateOf(intervalMs.toFloat()) }
+    val predefinedApps = listOf(
+        DriverAppItem("Uber Driver", "UBER", "com.ubercab.driver", Color.White),
+        DriverAppItem("Lyft", "LYFT", "me.lyft.driver", Color(0xFFFF00BF)),
+        DriverAppItem("Ola Driver", "OLA", "com.olacabs.driver", Color(0xFF32D74B)),
+        DriverAppItem("Rapido", "RAPIDO", "com.rapido.passenger", BrandAmber),
+        DriverAppItem("inDrive", "INDRIVE", "com.indriver", BrandCyan),
+        DriverAppItem("Grab Driver", "GRAB", "com.grabtaxi.driver2", Color(0xFF00B14F))
+    )
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101624))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(
@@ -984,15 +934,278 @@ fun ModernClickSpeedCard(
             ) {
                 Column {
                     Text(
-                        text = "CLICK SPEED INTERVAL",
+                        text = "AUTO-LAUNCH APPS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF00D2FF),
+                        color = BrandCyan,
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "Touch Pulse Frequency",
+                        text = "Supported Taxi Platforms",
                         fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onShowInfo, modifier = Modifier.size(28.dp)) {
+                        Text(text = "ⓘ", color = TextMuted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Switch(
+                        checked = autoLaunchEnabled,
+                        onCheckedChange = onToggleAutoLaunch,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = BrandCyan
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Branded 3x2 Grid
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                predefinedApps.chunked(3).forEach { rowApps ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowApps.forEach { appItem ->
+                            val isIncluded = targetPackages.contains(appItem.packageId, ignoreCase = true)
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isIncluded) BrandCyan.copy(alpha = 0.12f) else DarkControl,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isIncluded) BrandCyan else Color.White.copy(alpha = 0.06f)
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        val currentList = targetPackages.split(",").map { it.trim() }.toMutableList()
+                                        if (isIncluded) {
+                                            currentList.removeAll { it.equals(appItem.packageId, ignoreCase = true) }
+                                        } else {
+                                            if (!currentList.contains(appItem.packageId)) {
+                                                currentList.add(appItem.packageId)
+                                            }
+                                        }
+                                        onPackagesUpdated(currentList.filter { it.isNotEmpty() }.joinToString(", "))
+                                    }
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color.Black,
+                                        modifier = Modifier.size(34.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = appItem.badge.take(3),
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 9.sp,
+                                                color = appItem.badgeColor
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = appItem.name,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isIncluded) Color.White else TextMuted,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = if (isIncluded) "● Active" else "○ Inactive",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isIncluded) BrandCyan else TextMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 5. Detection Strategy Selection (Rich Vector Visual Cards)
+// ==========================================
+@Composable
+fun DetectionStrategyVisualCards(
+    currentMode: OperatingMode,
+    onModeSelected: (OperatingMode) -> Unit,
+    onShowInfo: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "DETECTION STRATEGY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandCyan,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "Acceptance Engine Mode",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                IconButton(onClick = onShowInfo, modifier = Modifier.size(28.dp)) {
+                    Text(text = "ⓘ", color = TextMuted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            OperatingMode.entries.forEach { mode ->
+                val isSelected = (mode == currentMode)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) BrandCyan.copy(alpha = 0.12f) else DarkControl,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.2.dp,
+                        if (isSelected) BrandCyan else Color.White.copy(alpha = 0.06f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { onModeSelected(mode) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) BrandCyan.copy(alpha = 0.2f) else DarkBase,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = when (mode) {
+                                        OperatingMode.SMART_ACCEPT -> "⚡"
+                                        OperatingMode.SINGLE_TARGET -> "🎯"
+                                        OperatingMode.MULTI_TARGET -> "🔢"
+                                    },
+                                    fontSize = 20.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = mode.displayName,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = if (isSelected) BrandCyan else Color.White
+                                )
+                                if (mode == OperatingMode.SMART_ACCEPT) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = BrandGreen.copy(alpha = 0.2f),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, BrandGreen.copy(alpha = 0.4f))
+                                    ) {
+                                        Text(
+                                            text = "RECOMMENDED",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = BrandGreen,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = mode.description,
+                                fontSize = 12.sp,
+                                color = TextMuted,
+                                lineHeight = 16.sp
+                            )
+                        }
+
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { onModeSelected(mode) },
+                            colors = RadioButtonDefaults.colors(selectedColor = BrandCyan)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// 6. Standardized Range Slider Card
+// ==========================================
+@Composable
+fun StandardizedSliderCard(
+    title: String,
+    subtitle: String,
+    currentVal: Float,
+    minVal: Float,
+    maxVal: Float,
+    valueFormat: String,
+    minScaleLabel: String,
+    maxScaleLabel: String,
+    accentColor: Color,
+    onValueChange: (Float) -> Unit
+) {
+    var sliderState by remember(currentVal) { mutableFloatStateOf(currentVal) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = title,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accentColor,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = subtitle,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
@@ -1000,330 +1213,335 @@ fun ModernClickSpeedCard(
 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF00D2FF).copy(alpha = 0.2f)
+                    color = accentColor.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = "${sliderVal.toInt()} ms",
+                        text = valueFormat,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
-                        fontSize = 13.sp,
-                        color = Color(0xFF00D2FF),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        color = accentColor,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Slider(
-                value = sliderVal,
-                onValueChange = { sliderVal = it },
-                onValueChangeFinished = { onIntervalChanged(sliderVal.toLong()) },
-                valueRange = 50f..2000f,
-                steps = 38,
+                value = sliderState,
+                onValueChange = { sliderState = it },
+                onValueChangeFinished = { onValueChange(sliderState) },
+                valueRange = minVal..maxVal,
                 colors = SliderDefaults.colors(
-                    thumbColor = Color(0xFF00D2FF),
-                    activeTrackColor = Color(0xFF00D2FF)
+                    thumbColor = accentColor,
+                    activeTrackColor = accentColor,
+                    inactiveTrackColor = DarkControl
                 )
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = minScaleLabel, fontSize = 11.sp, color = TextMuted)
+                Text(text = maxScaleLabel, fontSize = 11.sp, color = TextMuted)
+            }
         }
     }
 }
 
 // ==========================================
-// 7. Driver Safety & Automation Card
+// 7. Driver Safety & Automation Card (Streamlined 1-Line Taglines)
 // ==========================================
 @Composable
-fun ModernSafetyAutomationCard(
+fun ErgonomicSafetyAutomationCard(
     settings: AppSettings,
     onAutoPauseAcceptChanged: (Boolean) -> Unit,
     onKeyboardPauseChanged: (Boolean) -> Unit,
     onMotionLockChanged: (Boolean) -> Unit,
     onVoiceCommandsChanged: (Boolean) -> Unit,
-    onTtsChanged: (Boolean) -> Unit
+    onTtsChanged: (Boolean) -> Unit,
+    onShowInfo: (String, String) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101624))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = "SAFETY & DRIVER AUTOMATION",
+                text = "DRIVER SAFETY & AUTOMATION",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF00D2FF),
+                color = BrandCyan,
                 letterSpacing = 1.sp
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Road Safety & Distraction Prevention",
-                fontSize = 16.sp,
+                text = "Smart Highway Safety Shields",
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            ModernToggleRow(
+            ErgonomicToggleRow(
                 title = "Keyboard Auto-Pause",
-                desc = "Pause auto-clicks automatically when soft keyboard is open for typing",
+                tagline = "Pauses clicks when soft keyboard is open for typing",
                 checked = settings.autoPauseOnKeyboard,
-                onCheckedChange = onKeyboardPauseChanged
+                onCheckedChange = onKeyboardPauseChanged,
+                onInfoClick = {
+                    onShowInfo("Keyboard Auto-Pause", "Detects when you are typing a destination in Google Maps or a message to passenger, and automatically freezes auto-clicks so your typing is never interrupted.")
+                }
             )
 
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 10.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 8.dp))
 
-            ModernToggleRow(
+            ErgonomicToggleRow(
                 title = "Auto-Pause on Accept",
-                desc = "Stop clicking immediately as soon as a ride offer is successfully accepted",
+                tagline = "Halts clicking sequence immediately once ride is booked",
                 checked = settings.autoPauseOnAccept,
-                onCheckedChange = onAutoPauseAcceptChanged
+                onCheckedChange = onAutoPauseAcceptChanged,
+                onInfoClick = {
+                    onShowInfo("Auto-Pause on Accept", "Immediately pauses the auto-click sequence once an offer is locked in, preventing accidental cancellations or unintended button presses.")
+                }
             )
 
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 10.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 8.dp))
 
-            ModernToggleRow(
-                title = "Drive-Motion Safety Lock",
-                desc = "Sensor pauses gestures when high vehicle speed or sharp turns are detected",
+            ErgonomicToggleRow(
+                title = "Drive-Motion Safety Shield",
+                tagline = "Sensor pauses gestures during high-speed driving or sharp turns",
                 checked = settings.motionSafetyLockEnabled,
-                onCheckedChange = onMotionLockChanged
+                onCheckedChange = onMotionLockChanged,
+                onInfoClick = {
+                    onShowInfo("Drive-Motion Safety Shield", "Monitors device accelerometer and gyroscope. If vehicle acceleration exceeds safe thresholds, gestures pause until the vehicle stabilizes.")
+                }
             )
 
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 10.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 8.dp))
 
-            ModernToggleRow(
+            ErgonomicToggleRow(
                 title = "Hands-Free Voice Commands",
-                desc = "Speak \"ACCEPT\", \"START\", or \"STOP\" to operate without touching the phone",
+                tagline = "Speak \"ACCEPT\", \"START\", or \"STOP\" hands-free",
                 checked = settings.voiceCommandsEnabled,
-                onCheckedChange = onVoiceCommandsChanged
+                onCheckedChange = onVoiceCommandsChanged,
+                onInfoClick = {
+                    onShowInfo("Hands-Free Voice Commands", "Allows you to operate Taptix purely by voice commands while driving without taking your eyes off the highway.")
+                }
             )
 
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 10.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 8.dp))
 
-            ModernToggleRow(
-                title = "TTS Audio Speech Announcements",
-                desc = "Speaks trip fare, arrival, and accept alerts out loud through car speaker",
+            ErgonomicToggleRow(
+                title = "TTS Speech Announcements",
+                tagline = "Speaks trip fare & alerts out loud via vehicle speaker",
                 checked = settings.ttsFeedbackEnabled,
-                onCheckedChange = onTtsChanged
+                onCheckedChange = onTtsChanged,
+                onInfoClick = {
+                    onShowInfo("TTS Speech Announcements", "Uses Android's Speech synthesizer to announce new ride fares, distance, and booking confirmations through your car's Bluetooth audio.")
+                }
             )
         }
     }
 }
 
 // ==========================================
-// 8. Night-Mode & OLED Burn-In Card with Intensity Slider
+// 8. Night-Mode & OLED Screen Health Card
 // ==========================================
 @Composable
-fun ModernNightModeBurnInCard(
+fun ErgonomicNightModeCard(
     settings: AppSettings,
     onNightModeDimChanged: (Boolean) -> Unit,
     onIntensityChanged: (Float) -> Unit,
     onDimDelayChanged: (Int) -> Unit,
-    onPixelShiftChanged: (Boolean) -> Unit
+    onPixelShiftChanged: (Boolean) -> Unit,
+    onShowInfo: () -> Unit
 ) {
-    var intensityVal by remember(settings.nightModeDimIntensity) {
-        mutableFloatStateOf(settings.nightModeDimIntensity)
-    }
-    var delayVal by remember(settings.autoDimDelaySeconds) {
-        mutableFloatStateOf(settings.autoDimDelaySeconds.toFloat())
-    }
-
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101624))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                text = "NIGHT DRIVING & SCREEN HEALTH",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF00D2FF),
-                letterSpacing = 1.sp
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "🌙 Night-Mode Auto-Dim & OLED Protection",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "NIGHT DRIVING & SCREEN HEALTH",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandCyan,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "🌙 Night-Mode & OLED Burn-In Shield",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                IconButton(onClick = onShowInfo, modifier = Modifier.size(28.dp)) {
+                    Text(text = "ⓘ", color = TextMuted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            ModernToggleRow(
+            ErgonomicToggleRow(
                 title = "Auto-Dim Overlay When Idle",
-                desc = "Dims floating controls to save driver vision and reduce cabin glare at night",
+                tagline = "Reduces floating brightness to prevent cabin glare",
                 checked = settings.nightModeAutoDimEnabled,
-                onCheckedChange = onNightModeDimChanged
+                onCheckedChange = onNightModeDimChanged,
+                onInfoClick = onShowInfo
             )
 
             if (settings.nightModeAutoDimEnabled) {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Dim Intensity Slider
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Dimming Opacity Intensity",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFE2E8F0)
-                    )
-                    Text(
-                        text = "${(intensityVal * 100).toInt()}% Opacity",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFFB800)
-                    )
+                // Standardized Dimming Opacity Slider
+                var intensityState by remember(settings.nightModeDimIntensity) {
+                    mutableFloatStateOf(settings.nightModeDimIntensity)
                 }
-                Slider(
-                    value = intensityVal,
-                    onValueChange = { intensityVal = it },
-                    onValueChangeFinished = { onIntensityChanged(intensityVal) },
-                    valueRange = 0.15f..0.85f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFFFFB800),
-                        activeTrackColor = Color(0xFFFFB800)
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Dim Delay Slider
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Idle Timeout Delay",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFE2E8F0)
-                    )
-                    Text(
-                        text = "${delayVal.toInt()} seconds",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF00D2FF)
-                    )
-                }
-                Slider(
-                    value = delayVal,
-                    onValueChange = { delayVal = it },
-                    onValueChangeFinished = { onDimDelayChanged(delayVal.toInt()) },
-                    valueRange = 3f..30f,
-                    steps = 26,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFF00D2FF),
-                        activeTrackColor = Color(0xFF00D2FF)
-                    )
-                )
-            }
-
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 10.dp))
-
-            ModernToggleRow(
-                title = "OLED Pixel-Shift Burn-In Shield",
-                desc = "Periodically shifts floating UI elements by +/- 2px to prevent permanent OLED burn-in",
-                checked = settings.pixelShiftBurnInProtection,
-                onCheckedChange = onPixelShiftChanged
-            )
-        }
-    }
-}
-
-// ==========================================
-// 9. App-Specific Auto-Launch Card
-// ==========================================
-@Composable
-fun ModernAutoLaunchCard(
-    settings: AppSettings,
-    onAutoLaunchChanged: (Boolean) -> Unit,
-    onTargetPackagesChanged: (String) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101624))
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                text = "AUTOMATIC APP DETECTION",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF00D2FF),
-                letterSpacing = 1.sp
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Auto-Launch Over Driver Apps",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            ModernToggleRow(
-                title = "Auto-Show Floating Bar",
-                desc = "Automatically pop up Taptix overlay whenever Uber, Ola, Rapido, or Lyft is opened",
-                checked = settings.autoLaunchForTargetAppsEnabled,
-                onCheckedChange = onAutoLaunchChanged
-            )
-
-            if (settings.autoLaunchForTargetAppsEnabled) {
-                Spacer(modifier = Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = settings.targetAppPackages,
-                    onValueChange = onTargetPackagesChanged,
-                    label = { Text("Target App Package IDs") },
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = DarkControl,
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = "Dimming Opacity Intensity", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(text = "${(intensityState * 100).toInt()}% Opacity", fontSize = 12.sp, fontWeight = FontWeight.Black, color = BrandAmber)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Slider(
+                            value = intensityState,
+                            onValueChange = { intensityState = it },
+                            onValueChangeFinished = { onIntensityChanged(intensityState) },
+                            valueRange = 0.15f..0.85f,
+                            colors = SliderDefaults.colors(thumbColor = BrandAmber, activeTrackColor = BrandAmber)
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "15% (Ultra Dim)", fontSize = 10.sp, color = TextMuted)
+                            Text(text = "85% (Visible)", fontSize = 10.sp, color = TextMuted)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Standardized Idle Timeout Delay Slider
+                var delayState by remember(settings.autoDimDelaySeconds) {
+                    mutableFloatStateOf(settings.autoDimDelaySeconds.toFloat())
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = DarkControl,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = "Idle Timeout Delay", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(text = "${delayState.toInt()} seconds", fontSize = 12.sp, fontWeight = FontWeight.Black, color = BrandCyan)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Slider(
+                            value = delayState,
+                            onValueChange = { delayState = it },
+                            onValueChangeFinished = { onDimDelayChanged(delayState.toInt()) },
+                            valueRange = 3f..30f,
+                            steps = 26,
+                            colors = SliderDefaults.colors(thumbColor = BrandCyan, activeTrackColor = BrandCyan)
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "3s (Fast)", fontSize = 10.sp, color = TextMuted)
+                            Text(text = "30s", fontSize = 10.sp, color = TextMuted)
+                        }
+                    }
+                }
             }
+
+            HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 10.dp))
+
+            ErgonomicToggleRow(
+                title = "OLED Pixel-Shift Burn-In Shield",
+                tagline = "Shifts UI by 2px periodically to protect phone display",
+                checked = settings.pixelShiftBurnInProtection,
+                onCheckedChange = onPixelShiftChanged,
+                onInfoClick = onShowInfo
+            )
         }
     }
 }
 
 // ==========================================
-// Helper UI Components
+// Helper Ergonomic Toggle Row (Oversized 52dp)
 // ==========================================
 @Composable
-fun ModernToggleRow(
+fun ErgonomicToggleRow(
     title: String,
-    desc: String,
+    tagline: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    onInfoClick: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = onInfoClick, modifier = Modifier.size(20.dp)) {
+                    Text(text = "ⓘ", color = TextMuted, fontSize = 13.sp)
+                }
+            }
             Text(
-                text = desc,
-                fontSize = 12.sp,
-                color = Color(0xFFA0AEC0),
-                lineHeight = 16.sp
+                text = tagline,
+                fontSize = 11.sp,
+                color = TextMuted,
+                maxLines = 1
             )
         }
+
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.Black,
-                checkedTrackColor = Color(0xFF00D2FF)
+                checkedTrackColor = BrandCyan,
+                uncheckedTrackColor = DarkControl
             )
         )
     }
 }
 
+// ==========================================
+// In-App Auto-Update Card
+// ==========================================
 @Composable
 fun InAppUpdateCard(
     updateInfo: UpdateInfo,
@@ -1334,9 +1552,9 @@ fun InAppUpdateCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, Color(0xFF00D2FF), RoundedCornerShape(20.dp)),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1A2E))
+            .border(1.5.dp, BrandCyan, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(
@@ -1347,18 +1565,18 @@ fun InAppUpdateCard(
                 Text(
                     text = "🚀 New Update Available: v${updateInfo.versionName}",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = Color(0xFF00D2FF)
+                    fontSize = 15.sp,
+                    color = BrandCyan
                 )
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFF00E676).copy(alpha = 0.2f)
+                    color = BrandGreen.copy(alpha = 0.2f)
                 ) {
                     Text(
                         text = "NEW",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF00E676),
+                        color = BrandGreen,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -1366,7 +1584,7 @@ fun InAppUpdateCard(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = updateInfo.releaseNotes,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 color = Color(0xFFCBD5E1)
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -1374,20 +1592,22 @@ fun InAppUpdateCard(
                 LinearProgressIndicator(
                     progress = { updateProgress / 100f },
                     modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFF00D2FF)
+                    color = BrandCyan
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = statusText.ifEmpty { "Downloading update... ${updateProgress.toInt()}%" },
                     fontSize = 12.sp,
-                    color = Color(0xFF00D2FF)
+                    color = BrandCyan
                 )
             } else {
                 Button(
                     onClick = onUpdateClick,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00D2FF))
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandCyan)
                 ) {
                     Text("⚡ Update Now (1-Tap)", fontWeight = FontWeight.Bold, color = Color.Black)
                 }
