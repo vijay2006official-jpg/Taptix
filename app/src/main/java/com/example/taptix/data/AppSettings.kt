@@ -20,6 +20,8 @@ data class AppSettings(
     val autoHideOnExit: Boolean = false,
     val voiceCommandsEnabled: Boolean = true,
     val nightModeAutoDimEnabled: Boolean = true,
+    val nightModeDimIntensity: Float = 0.35f,
     val autoDimDelaySeconds: Int = 8,
-    val pixelShiftBurnInProtection: Boolean = true
+    val pixelShiftBurnInProtection: Boolean = true,
+    val autoPauseOnKeyboard: Boolean = true
 )

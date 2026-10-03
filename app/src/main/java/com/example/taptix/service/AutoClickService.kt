@@ -3,14 +3,19 @@ package com.example.taptix.service
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.content.ComponentName
+import android.content.Context
 import android.graphics.Path
 import android.graphics.Rect
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.TextUtils
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import com.example.taptix.data.PreferencesRepository
 import com.example.taptix.model.OperatingMode
 import com.example.taptix.model.PlatformPreset
@@ -38,6 +43,7 @@ class AutoClickService : AccessibilityService() {
 
     private var lastAcceptTime = 0L
     private var lastAutoLaunchedPackage: String = ""
+    private var isKeyboardActive = false
 
     var onStateChangedListener: ((isRunning: Boolean, mode: OperatingMode) -> Unit)? = null
 
@@ -77,6 +83,9 @@ class AutoClickService : AccessibilityService() {
 
         val settings = prefsRepo.getSettings()
 
+        // Check if on-screen soft keyboard is currently open
+        checkKeyboardActive(event)
+
         // App-Specific Auto-Launch Handler
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val packageName = event.packageName?.toString() ?: ""
@@ -85,7 +94,24 @@ class AutoClickService : AccessibilityService() {
 
         // Smart Accept Scan Handler
         if (isClickingActive.get() && settings.operatingMode == OperatingMode.SMART_ACCEPT) {
-            handleSmartAcceptScan(settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
+            if (!isKeyboardActive || !settings.autoPauseOnKeyboard) {
+                handleSmartAcceptScan(settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
+            }
+        }
+    }
+
+    private fun checkKeyboardActive(event: AccessibilityEvent) {
+        if (!prefsRepo.getSettings().autoPauseOnKeyboard) {
+            isKeyboardActive = false
+            return
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                val inputMethodWindow = windows.find { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+                isKeyboardActive = inputMethodWindow != null
+            }
+        } catch (e: Exception) {
+            // Safe fallback
         }
     }
 
@@ -223,45 +249,65 @@ class AutoClickService : AccessibilityService() {
      * Programmatically performs a single tap at (x, y) coordinates.
      */
     fun performTap(x: Float, y: Float, durationMs: Long = 50L) {
-        val path = Path().apply {
-            moveTo(x, y)
+        if (isKeyboardActive && prefsRepo.getSettings().autoPauseOnKeyboard) {
+            Log.d(TAG, "Keyboard active, skipping tap at ($x, $y)")
+            return
         }
+        if (x < 0 || y < 0) return
 
-        val stroke = GestureDescription.StrokeDescription(path, 0, durationMs)
-        val gesture = GestureDescription.Builder().addStroke(stroke).build()
-
-        dispatchGesture(gesture, object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                Log.d(TAG, "Tap completed at ($x, $y)")
+        try {
+            val path = Path().apply {
+                moveTo(x, y)
             }
 
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                Log.w(TAG, "Tap cancelled at ($x, $y)")
-            }
-        }, null)
+            val stroke = GestureDescription.StrokeDescription(path, 0, durationMs.coerceAtLeast(10L))
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+
+            dispatchGesture(gesture, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    Log.d(TAG, "Tap completed at ($x, $y)")
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    Log.w(TAG, "Tap cancelled at ($x, $y)")
+                }
+            }, null)
+        } catch (e: Exception) {
+            Log.e(TAG, "performTap error: ${e.message}")
+        }
     }
 
     /**
      * Programmatically performs a swipe gesture from (startX, startY) to (endX, endY).
      */
     fun performSwipe(startX: Float, startY: Float, endX: Float, endY: Float, durationMs: Long = 350L) {
-        val path = Path().apply {
-            moveTo(startX, startY)
-            lineTo(endX, endY)
+        if (isKeyboardActive && prefsRepo.getSettings().autoPauseOnKeyboard) {
+            Log.d(TAG, "Keyboard active, skipping swipe")
+            return
         }
+        if (startX < 0 || startY < 0 || endX < 0 || endY < 0) return
 
-        val stroke = GestureDescription.StrokeDescription(path, 0, durationMs)
-        val gesture = GestureDescription.Builder().addStroke(stroke).build()
-
-        dispatchGesture(gesture, object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                Log.d(TAG, "Swipe completed from ($startX, $startY) to ($endX, $endY)")
+        try {
+            val path = Path().apply {
+                moveTo(startX, startY)
+                lineTo(endX, endY)
             }
 
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                Log.w(TAG, "Swipe cancelled")
-            }
-        }, null)
+            val stroke = GestureDescription.StrokeDescription(path, 0, durationMs.coerceAtLeast(50L))
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+
+            dispatchGesture(gesture, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    Log.d(TAG, "Swipe completed from ($startX, $startY) to ($endX, $endY)")
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    Log.w(TAG, "Swipe cancelled")
+                }
+            }, null)
+        } catch (e: Exception) {
+            Log.e(TAG, "performSwipe error: ${e.message}")
+        }
     }
 
     // --- Smart Accept Engine (Accessibility Tree OCR) ---
@@ -353,6 +399,26 @@ class AutoClickService : AccessibilityService() {
         @Volatile
         var instance: AutoClickService? = null
             private set
+
+        fun isServiceRunning(): Boolean = instance != null
+
+        fun isAccessibilityPermissionGranted(context: Context): Boolean {
+            val expectedComponentName = ComponentName(context, AutoClickService::class.java)
+            val enabledServicesSetting = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+            val colonSplitter = TextUtils.SimpleStringSplitter(':')
+            colonSplitter.setString(enabledServicesSetting)
+            while (colonSplitter.hasNext()) {
+                val componentNameString = colonSplitter.next()
+                val enabledComponent = ComponentName.unflattenFromString(componentNameString)
+                if (enabledComponent != null && enabledComponent == expectedComponentName) {
+                    return true
+                }
+            }
+            return false
+        }
 
         fun isServiceEnabled(): Boolean = instance != null
     }

@@ -650,8 +650,9 @@ class OverlayService : Service() {
         toolbarContainer?.background = createRoundBackground("#030303", 28f)
         tripCardContainer?.background = createRoundBackground("#08080C", 20f)
 
+        val intensity = prefsRepo.getSettings().nightModeDimIntensity.coerceIn(0.15f, 0.85f)
         toolbarParams?.let { params ->
-            params.alpha = 0.35f
+            params.alpha = intensity
             toolbarView?.let { windowManager.updateViewLayout(it, params) }
         }
 

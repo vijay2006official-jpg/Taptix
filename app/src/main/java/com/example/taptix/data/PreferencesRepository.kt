@@ -36,8 +36,10 @@ class PreferencesRepository(context: Context) {
         val voiceCommands = prefs.getBoolean(KEY_VOICE_COMMANDS, true)
 
         val nightModeDim = prefs.getBoolean(KEY_NIGHT_MODE_AUTO_DIM, true)
+        val dimIntensity = prefs.getFloat(KEY_NIGHT_MODE_DIM_INTENSITY, 0.35f)
         val dimDelay = prefs.getInt(KEY_AUTO_DIM_DELAY, 8)
         val pixelShift = prefs.getBoolean(KEY_PIXEL_SHIFT, true)
+        val autoPauseKeyboard = prefs.getBoolean(KEY_AUTO_PAUSE_KEYBOARD, true)
 
         return AppSettings(
             clickIntervalMs = interval,
@@ -52,8 +54,10 @@ class PreferencesRepository(context: Context) {
             autoHideOnExit = autoHide,
             voiceCommandsEnabled = voiceCommands,
             nightModeAutoDimEnabled = nightModeDim,
+            nightModeDimIntensity = dimIntensity,
             autoDimDelaySeconds = dimDelay,
-            pixelShiftBurnInProtection = pixelShift
+            pixelShiftBurnInProtection = pixelShift,
+            autoPauseOnKeyboard = autoPauseKeyboard
         )
     }
 
@@ -113,6 +117,14 @@ class PreferencesRepository(context: Context) {
         prefs.edit().putBoolean(KEY_PIXEL_SHIFT, enabled).apply()
     }
 
+    fun saveNightModeDimIntensity(intensity: Float) {
+        prefs.edit().putFloat(KEY_NIGHT_MODE_DIM_INTENSITY, intensity).apply()
+    }
+
+    fun saveAutoPauseOnKeyboard(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_PAUSE_KEYBOARD, enabled).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "taptix_driver_prefs"
         private const val KEY_INTERVAL = "key_interval"
@@ -127,8 +139,10 @@ class PreferencesRepository(context: Context) {
         private const val KEY_AUTO_HIDE = "key_auto_hide"
         private const val KEY_VOICE_COMMANDS = "key_voice_commands"
         private const val KEY_NIGHT_MODE_AUTO_DIM = "key_night_mode_auto_dim"
+        private const val KEY_NIGHT_MODE_DIM_INTENSITY = "key_night_mode_dim_intensity"
         private const val KEY_AUTO_DIM_DELAY = "key_auto_dim_delay"
         private const val KEY_PIXEL_SHIFT = "key_pixel_shift"
+        private const val KEY_AUTO_PAUSE_KEYBOARD = "key_auto_pause_keyboard"
 
         private const val DEFAULT_TARGET_PACKAGES =
             "com.ubercab.driver, me.lyft.driver, com.indriver, com.olacabs.driver, com.rapido.passenger, com.grabtaxi.driver2, com.dd.driver"
