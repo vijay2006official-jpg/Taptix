@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Taptix Driver Assistant</title>
+    <style>
+        :root {
+            --bg-color: #121214;
+            --surface-color: #1E1E24;
+            --accent-cyan: #00E5FF;
+            --accent-green: #00E676;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A0A0B0;
+            --border-color: #2E2F38;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 32px 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--surface-color);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            color: var(--accent-cyan);
+            font-size: 2rem;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        h2 {
+            color: var(--accent-green);
+            font-size: 1.3rem;
+            margin-top: 32px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+        p, li {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        strong {
+            color: var(--text-primary);
+        }
+        .highlight-box {
+            background: rgba(0, 229, 255, 0.08);
+            border-left: 4px solid var(--accent-cyan);
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .badge {
+            display: inline-block;
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--accent-green);
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 12px;
+            text-transform: uppercase;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <span class="badge">Google Play Compliance</span>
+    <h1>Taptix Privacy Policy</h1>
+    <p><em>Last updated: October 2026</em></p>
+
+    <div class="highlight-box">
+        <strong>Important Summary:</strong> Taptix is a driver safety and ergonomics utility designed for commercial ride-hailing drivers. <strong>We do not collect, sell, store, or transmit any personal data, audio, passwords, credentials, or financial information.</strong> All processing occurs strictly on your local device.
+    </div>
+
+    <h2>1. Android Accessibility Service API Prominent Disclosure</h2>
+    <p>Taptix requires the use of the Android <code>AccessibilityService</code> API to provide its core automated assistant functionality:</p>
+    <ul>
+        <li><strong>Purpose of Use:</strong> The Accessibility Service is used solely to dispatch automated touch gestures and screen taps on designated driver dispatch screens (e.g., accepting incoming ride trips). This allows drivers to interact safely with vehicle-mounted phones with minimal eye-off-road distraction.</li>
+        <li><strong>No Keystroke or Input Logging:</strong> Taptix does NOT read, capture, or store text entered on virtual keyboards, passwords, credit card numbers, or messages.</li>
+        <li><strong>Auto-Pause Protection:</strong> Taptix automatically pauses all gesture actions whenever the on-screen soft keyboard is visible to ensure privacy and prevent accidental inputs.</li>
+        <li><strong>User Consent:</strong> The Accessibility Service is disabled by default and can only be activated with explicit, affirmative consent by the user via Android System Settings. It can be revoked at any time.</li>
+    </ul>
+
+    <h2>2. Display Over Other Apps (System Alert Window)</h2>
+    <p>Taptix requests permission to draw over other applications. This is used exclusively to display a floating heads-up control widget that stays visible while running partner driver and navigation apps. No overlay content obscures system safety dialogues.</p>
+
+    <h2>3. Data Collection and Transmission</h2>
+    <p>Taptix operates under a strict <strong>zero-data-collection</strong> architecture:</p>
+    <ul>
+        <li><strong>Zero Remote Servers:</strong> We do not operate remote user tracking databases or sell data to third-party ad networks.</li>
+        <li><strong>Local Storage:</strong> Your preferences (e.g., target apps, click frequency, night-mode intensity) are stored 100% locally on your device via encrypted Android SharedPreferences.</li>
+        <li><strong>Updates:</strong> The application may verify GitHub release endpoints solely to inform you of newer versions. No device identifiers or telemetries are shared during update checks.</li>
+    </ul>
+
+    <h2>4. Children’s Privacy</h2>
+    <p>Taptix is exclusively designed for licensed commercial adult drivers and does not address or knowingly interact with individuals under the age of 18.</p>
+
+    <h2>5. Contact Us</h2>
+    <p>If you have any questions or feedback regarding this Privacy Policy or Taptix's data practices, you may reach out to us at:</p>
+    <p><strong>Developer:</strong> Taptix Mobile Team<br>
+    <strong>GitHub:</strong> <a href="https://github.com/vijay2006official-jpg/Taptix" style="color: var(--accent-cyan);">github.com/vijay2006official-jpg/Taptix</a><br>
+    <strong>Email:</strong> support@taptix.app</p>
+
+    <footer>
+        &copy; 2026 Taptix. All rights reserved.
+    </footer>
+</div>
+
+</body>
+</html>
