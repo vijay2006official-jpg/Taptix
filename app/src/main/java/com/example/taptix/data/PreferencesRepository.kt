@@ -22,7 +22,7 @@ class PreferencesRepository(context: Context) {
             OperatingMode.SMART_ACCEPT
         }
 
-        val presetId = prefs.getString(KEY_PRESET, PlatformPreset.UBER.id) ?: PlatformPreset.UBER.id
+        val presetId = prefs.getString(KEY_PRESET, PlatformPreset.UNIVERSAL.id) ?: PlatformPreset.UNIVERSAL.id
         val preset = PlatformPreset.fromId(presetId)
 
         val customKeywords = prefs.getString(KEY_CUSTOM_KEYWORDS, "ACCEPT, CONFIRM, RIDE") ?: "ACCEPT, CONFIRM, RIDE"
@@ -145,6 +145,6 @@ class PreferencesRepository(context: Context) {
         private const val KEY_AUTO_PAUSE_KEYBOARD = "key_auto_pause_keyboard"
 
         private const val DEFAULT_TARGET_PACKAGES =
-            "com.ubercab.driver, me.lyft.driver, com.indriver, com.olacabs.driver, com.rapido.passenger, com.grabtaxi.driver2, com.dd.driver"
+            "com.ubercab.driver, com.olacabs.driver, com.olacabs.partner, com.rapido.captain, com.rapido.passenger, com.indriver, sinet.startup.inDriver, in.juspay.nammayatripartner, com.theporter.partner, me.lyft.driver, com.grabtaxi.driver2, com.dd.driver"
     }
 }

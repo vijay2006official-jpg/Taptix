@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2",
-  "apkUrl": "https://github.com/vijay2006official-jpg/Taptix/releases/download/v1.2/Taptix.apk",
-  "releaseNotes": "Commercial-grade UI/UX overhaul: driver-first ergonomics, 56dp oversized touch targets, branded taxi app grid, standardized range sliders, and modal info tooltips."
+  "versionCode": 4,
+  "versionName": "1.3",
+  "apkUrl": "https://github.com/vijay2006official-jpg/Taptix/releases/download/v1.3/Taptix.apk",
+  "releaseNotes": "Critical Auto-Accept Update: Universal Ride Matcher (Uber, Ola, Rapido Captain, inDrive, Namma Yatri), Direct Native Action-Clicks, Swipe Gesture Dispatching, Vibration Haptic Feedback, and TTS Alerts."
 }

@@ -110,6 +110,9 @@ class OverlayService : Service() {
 
         // Start Auto-Dim Idle Timer if enabled
         resetAutoDimTimer()
+
+        // Automatically activate Auto-Accept engine
+        startClickingSequence()
     }
 
     private fun setupVoiceControl() {
@@ -726,7 +729,7 @@ class OverlayService : Service() {
         isPlaying = true
         playPauseBtn?.text = "PAUSE"
         playPauseBtn?.background = createRoundBackground("#D84315", 14f)
-        statusTv?.text = "STATUS: ACTIVE"
+        statusTv?.text = "AUTO-ACCEPT: ACTIVE"
         statusTv?.setTextColor(Color.GREEN)
 
         service.onStateChangedListener = { isRunning, _ ->

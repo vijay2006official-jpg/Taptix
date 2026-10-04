@@ -2,20 +2,24 @@ package com.example.taptix.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
-import android.content.Intent
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import android.widget.Toast
 import com.example.taptix.data.PreferencesRepository
 import com.example.taptix.model.OperatingMode
 import com.example.taptix.model.PlatformPreset
@@ -25,7 +29,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Core Accessibility Service for Taptix.
- * Handles programmatic gesture execution (taps/swipes), App-Specific Auto-Launch, and Smart Accept.
+ * Handles programmatic gesture execution, real-time background ride detection,
+ * direct Action-Click dispatching, and sensory driver feedback.
  */
 class AutoClickService : AccessibilityService() {
 
@@ -33,10 +38,11 @@ class AutoClickService : AccessibilityService() {
     private var ttsManager: TtsManager? = null
 
     private val isServiceRunning = AtomicBoolean(false)
-    private val isClickingActive = AtomicBoolean(false)
+    private val isClickingActive = AtomicBoolean(true) // Active by default when Accessibility is enabled
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var clickRunnable: Runnable? = null
+    private var periodicScanRunnable: Runnable? = null
 
     private var targetPoints: List<TargetPoint> = emptyList()
     private var currentTargetIndex = 0
@@ -58,12 +64,16 @@ class AutoClickService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         isServiceRunning.set(true)
-        Log.d(TAG, "AutoClickService connected")
+        isClickingActive.set(true)
+        Log.d(TAG, "AutoClickService connected and activated")
+
+        startPeriodicScanIfNeeded()
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         isServiceRunning.set(false)
         stopClicking()
+        stopPeriodicScan()
         instance = null
         return super.onUnbind(intent)
     }
@@ -72,6 +82,7 @@ class AutoClickService : AccessibilityService() {
         super.onDestroy()
         isServiceRunning.set(false)
         stopClicking()
+        stopPeriodicScan()
         ttsManager?.shutdown()
         ttsManager = null
         instance = null
@@ -92,12 +103,43 @@ class AutoClickService : AccessibilityService() {
             handleAppSpecificAutoLaunch(packageName, settings.autoLaunchForTargetAppsEnabled, settings.targetAppPackages)
         }
 
-        // Smart Accept Scan Handler
+        // Smart Accept Scan Handler: Runs on any window change or content update
         if (isClickingActive.get() && settings.operatingMode == OperatingMode.SMART_ACCEPT) {
             if (!isKeyboardActive || !settings.autoPauseOnKeyboard) {
-                handleSmartAcceptScan(settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
+                handleSmartAcceptScan(event, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
             }
         }
+    }
+
+    fun setClickingActive(active: Boolean) {
+        isClickingActive.set(active)
+        if (active) {
+            startPeriodicScanIfNeeded()
+        } else {
+            stopClicking()
+            stopPeriodicScan()
+        }
+    }
+
+    private fun startPeriodicScanIfNeeded() {
+        stopPeriodicScan()
+        periodicScanRunnable = object : Runnable {
+            override fun run() {
+                if (isServiceRunning.get() && isClickingActive.get()) {
+                    val settings = prefsRepo.getSettings()
+                    if (settings.operatingMode == OperatingMode.SMART_ACCEPT && (!isKeyboardActive || !settings.autoPauseOnKeyboard)) {
+                        handleSmartAcceptScan(null, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
+                    }
+                    mainHandler.postDelayed(this, 350L) // Scan every 350ms for instant reaction
+                }
+            }
+        }
+        mainHandler.post(periodicScanRunnable!!)
+    }
+
+    private fun stopPeriodicScan() {
+        periodicScanRunnable?.let { mainHandler.removeCallbacks(it) }
+        periodicScanRunnable = null
     }
 
     private fun checkKeyboardActive(event: AccessibilityEvent) {
@@ -130,7 +172,7 @@ class AutoClickService : AccessibilityService() {
                 startForegroundService(intent)
 
                 if (prefsRepo.getSettings().ttsFeedbackEnabled) {
-                    ttsManager?.speak("Ride hailing app detected. Taptix controls ready.")
+                    ttsManager?.speak("Ride hailing app detected. Taptix auto-accept ready.")
                 }
             }
         }
@@ -150,7 +192,7 @@ class AutoClickService : AccessibilityService() {
             ttsManager?.speak("Voice command: Accepting ride!")
         }
 
-        handleSmartAcceptScan(settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
+        handleSmartAcceptScan(null, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
 
         if (targetPoints.isNotEmpty()) {
             val point = targetPoints.first()
@@ -168,32 +210,28 @@ class AutoClickService : AccessibilityService() {
 
     fun triggerVoiceStart() {
         Log.d(TAG, "Voice Command Trigger: START")
+        setClickingActive(true)
         startClicking(targetPoints)
     }
 
     fun triggerVoiceStop() {
         Log.d(TAG, "Voice Command Trigger: STOP")
         if (prefsRepo.getSettings().ttsFeedbackEnabled) {
-            ttsManager?.speak("Taptix auto clicker paused.")
+            ttsManager?.speak("Taptix paused.")
         }
-        stopClicking()
+        setClickingActive(false)
     }
 
     // --- Gesture Execution Engine ---
 
     fun startClicking(targets: List<TargetPoint>) {
-        if (targets.isEmpty() && prefsRepo.getSettings().operatingMode != OperatingMode.SMART_ACCEPT) {
-            Log.w(TAG, "No targets defined for click loop")
-            return
-        }
-
         this.targetPoints = targets
         this.currentTargetIndex = 0
-        isClickingActive.set(true)
+        setClickingActive(true)
 
         val settings = prefsRepo.getSettings()
         if (settings.ttsFeedbackEnabled) {
-            ttsManager?.speak("Auto clicker activated")
+            ttsManager?.speak("Taptix auto clicker active")
         }
 
         scheduleNextClick()
@@ -232,8 +270,7 @@ class AutoClickService : AccessibilityService() {
                 }
 
                 OperatingMode.SMART_ACCEPT -> {
-                    // Periodic scan trigger in case window state didn't emit accessibility event
-                    handleSmartAcceptScan(settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
+                    handleSmartAcceptScan(null, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
                 }
             }
 
@@ -280,7 +317,7 @@ class AutoClickService : AccessibilityService() {
     /**
      * Programmatically performs a swipe gesture from (startX, startY) to (endX, endY).
      */
-    fun performSwipe(startX: Float, startY: Float, endX: Float, endY: Float, durationMs: Long = 350L) {
+    fun performSwipe(startX: Float, startY: Float, endX: Float, endY: Float, durationMs: Long = 300L) {
         if (isKeyboardActive && prefsRepo.getSettings().autoPauseOnKeyboard) {
             Log.d(TAG, "Keyboard active, skipping swipe")
             return
@@ -310,64 +347,140 @@ class AutoClickService : AccessibilityService() {
         }
     }
 
-    // --- Smart Accept Engine (Accessibility Tree OCR) ---
+    // --- Smart Accept Engine (Accessibility Tree OCR & Universal Matcher) ---
 
-    private fun handleSmartAcceptScan(preset: PlatformPreset, customKeywords: String, autoPause: Boolean) {
+    private fun handleSmartAcceptScan(
+        event: AccessibilityEvent?,
+        preset: PlatformPreset,
+        customKeywords: String,
+        autoPause: Boolean
+    ) {
         val now = System.currentTimeMillis()
-        if (now - lastAcceptTime < COOLDOWN_MS) return // Cooldown to prevent spamming
+        if (now - lastAcceptTime < COOLDOWN_MS) return // Cooldown to avoid rapid repeated accepts
 
-        val rootNode = rootInActiveWindow ?: return
-
+        // Build comprehensive keywords list combining preset + universal
         val targetKeywords = if (preset == PlatformPreset.CUSTOM) {
             customKeywords.split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }
         } else {
-            preset.keywords.map { it.uppercase() }
+            (preset.keywords + PlatformPreset.UNIVERSAL.keywords).map { it.uppercase() }.distinct()
         }
 
-        val matchedNode = findNodeWithKeywords(rootNode, targetKeywords)
-        if (matchedNode != null) {
-            val rect = Rect()
-            matchedNode.getBoundsInScreen(rect)
+        // Collect all potential root nodes (active window, event source, and all top-level application windows)
+        val rootsToScan = mutableListOf<AccessibilityNodeInfo>()
+        rootInActiveWindow?.let { rootsToScan.add(it) }
 
-            val centerX = rect.centerX().toFloat()
-            val centerY = rect.centerY().toFloat()
-
-            if (rect.width() > 0 && rect.height() > 0) {
-                lastAcceptTime = now
-                Log.d(TAG, "Smart Accept matched! Performing action at ($centerX, $centerY)")
-
-                if (preset.requiresSwipe) {
-                    // Uber style horizontal swipe to accept
-                    val startX = rect.left.toFloat() + 20f
-                    val endX = rect.right.toFloat() - 20f
-                    performSwipe(startX, centerY, endX, centerY)
-                } else {
-                    performTap(centerX, centerY)
-                }
-
-                val settings = prefsRepo.getSettings()
-                if (settings.ttsFeedbackEnabled) {
-                    ttsManager?.speak("Ride request accepted!")
-                }
-
-                // Update real-time floating trip overlay
-                OverlayService.instance?.updateTripStatus(
-                    com.example.taptix.model.TripStatusInfo(
-                        phase = com.example.taptix.model.TripPhase.EN_ROUTE_PICKUP,
-                        fare = "$18.50",
-                        distance = "3.8 mi",
-                        etaMinutes = 9,
-                        pickupAddress = "En Route to Passenger Location",
-                        dropoffAddress = "Destination Address"
-                    )
-                )
-
-                if (autoPause) {
-                    stopClicking()
-                    onStateChangedListener?.invoke(false, settings.operatingMode)
-                }
+        event?.source?.let { eventSource ->
+            if (!rootsToScan.contains(eventSource)) {
+                rootsToScan.add(eventSource)
             }
         }
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                for (w in windows) {
+                    val root = w.root
+                    if (root != null && !rootsToScan.contains(root)) {
+                        rootsToScan.add(root)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to query windows: ${e.message}")
+        }
+
+        for (root in rootsToScan) {
+            if (findAndExecuteAccept(root, targetKeywords)) {
+                lastAcceptTime = now
+                if (autoPause) {
+                    // Maintain active scanning unless explicitly stopped by user
+                }
+                break
+            }
+        }
+    }
+
+    private fun findAndExecuteAccept(rootNode: AccessibilityNodeInfo, keywords: List<String>): Boolean {
+        val matchedNode = findNodeWithKeywords(rootNode, keywords) ?: return false
+
+        val rect = Rect()
+        matchedNode.getBoundsInScreen(rect)
+        if (rect.width() <= 0 || rect.height() <= 0) return false
+
+        val centerX = rect.centerX().toFloat()
+        val centerY = rect.centerY().toFloat()
+
+        Log.d(TAG, "🔥 Smart Accept match found! Text: '${matchedNode.text ?: matchedNode.contentDescription}' at $rect")
+
+        // Step 1: Direct native accessibility click on the clickable parent/ancestor
+        var clickableNode: AccessibilityNodeInfo? = matchedNode
+        var actionClickSuccess = false
+        while (clickableNode != null) {
+            if (clickableNode.isClickable) {
+                actionClickSuccess = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                Log.d(TAG, "ACTION_CLICK executed on ${clickableNode.className}: success=$actionClickSuccess")
+                if (actionClickSuccess) break
+            }
+            clickableNode = clickableNode.parent
+        }
+
+        // Step 2: Check if this is a swipe slider (e.g., Uber or Rapido "Swipe to accept")
+        val nodeText = (matchedNode.text?.toString() ?: matchedNode.contentDescription?.toString() ?: "").uppercase()
+        val isSwipe = nodeText.contains("SWIPE") || (rect.width() > 500 && rect.height() < 250)
+
+        if (isSwipe) {
+            val startX = (rect.left + 60).toFloat()
+            val endX = (rect.right - 60).toFloat().coerceAtLeast(startX + 180f)
+            performSwipe(startX, centerY, endX, centerY, durationMs = 280L)
+        }
+
+        // Step 3: Always also dispatch a physical gesture tap at the exact center of the button!
+        performTap(centerX, centerY, durationMs = 50L)
+
+        // Step 4: Sensory driver feedback (Vibration, Audio TTS, and Screen Toast)
+        notifyRideAccepted()
+
+        return true
+    }
+
+    private fun notifyRideAccepted() {
+        try {
+            // Haptic feedback (400ms pulse)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vibratorManager?.defaultVibrator?.vibrate(
+                    VibrationEffect.createOneShot(400, VibrationEffect.DEFAULT_AMPLITUDE)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(400)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Vibration notification failed: ${e.message}")
+        }
+
+        // Audio TTS speech feedback
+        if (prefsRepo.getSettings().ttsFeedbackEnabled) {
+            ttsManager?.speak("Ride accepted by Taptix!")
+        }
+
+        // UI Toast feedback
+        mainHandler.post {
+            Toast.makeText(applicationContext, "🚀 Taptix: Ride Accepted!", Toast.LENGTH_SHORT).show()
+        }
+
+        // Update floating trip overlay
+        OverlayService.instance?.updateTripStatus(
+            com.example.taptix.model.TripStatusInfo(
+                phase = com.example.taptix.model.TripPhase.EN_ROUTE_PICKUP,
+                fare = "Active Ride",
+                distance = "Pickup",
+                etaMinutes = 5,
+                pickupAddress = "En Route to Passenger Location",
+                dropoffAddress = "Destination Address"
+            )
+        )
     }
 
     private fun findNodeWithKeywords(node: AccessibilityNodeInfo, keywords: List<String>): AccessibilityNodeInfo? {

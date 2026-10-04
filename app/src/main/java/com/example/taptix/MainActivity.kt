@@ -331,10 +331,12 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                         val intent = Intent(context, OverlayService::class.java)
                         context.stopService(intent)
                         isOverlayRunning = false
+                        AutoClickService.instance?.setClickingActive(false)
                     } else {
                         val intent = Intent(context, OverlayService::class.java)
                         context.startForegroundService(intent)
                         isOverlayRunning = true
+                        AutoClickService.instance?.setClickingActive(true)
                     }
                 }
             )
