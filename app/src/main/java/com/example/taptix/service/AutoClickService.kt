@@ -150,10 +150,18 @@ class AutoClickService : AccessibilityService() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 val inputMethodWindow = windows.find { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
-                isKeyboardActive = inputMethodWindow != null
+                if (inputMethodWindow != null) {
+                    val rect = Rect()
+                    inputMethodWindow.getBoundsInScreen(rect)
+                    isKeyboardActive = inputMethodWindow.isFocused && rect.height() > 300
+                } else {
+                    isKeyboardActive = false
+                }
+            } else {
+                isKeyboardActive = false
             }
         } catch (e: Exception) {
-            // Safe fallback
+            isKeyboardActive = false
         }
     }
 
@@ -255,9 +263,12 @@ class AutoClickService : AccessibilityService() {
 
             when (settings.operatingMode) {
                 OperatingMode.SINGLE_TARGET -> {
-                    if (targetPoints.isNotEmpty()) {
-                        val point = targetPoints.first()
+                    val point = targetPoints.firstOrNull()
+                    if (point != null) {
                         performTap(point.x.toFloat(), point.y.toFloat())
+                    } else {
+                        val dm = resources.displayMetrics
+                        performTap(dm.widthPixels / 2f, dm.heightPixels * 0.78f)
                     }
                 }
 
@@ -271,6 +282,9 @@ class AutoClickService : AccessibilityService() {
 
                 OperatingMode.SMART_ACCEPT -> {
                     handleSmartAcceptScan(null, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
+                    targetPoints.firstOrNull()?.let { pt ->
+                        performTap(pt.x.toFloat(), pt.y.toFloat())
+                    }
                 }
             }
 
@@ -295,6 +309,7 @@ class AutoClickService : AccessibilityService() {
         try {
             val path = Path().apply {
                 moveTo(x, y)
+                lineTo(x + 1f, y + 1f)
             }
 
             val stroke = GestureDescription.StrokeDescription(path, 0, durationMs.coerceAtLeast(10L))
@@ -484,11 +499,14 @@ class AutoClickService : AccessibilityService() {
     }
 
     private fun findNodeWithKeywords(node: AccessibilityNodeInfo, keywords: List<String>): AccessibilityNodeInfo? {
-        val nodeText = (node.text?.toString() ?: node.contentDescription?.toString() ?: "").uppercase()
+        val nodeText = (node.text?.toString() ?: "").uppercase()
+        val nodeDesc = (node.contentDescription?.toString() ?: "").uppercase()
+        val nodeId = (node.viewIdResourceName?.toString() ?: "").uppercase()
+        val combined = "$nodeText $nodeDesc $nodeId"
 
-        if (nodeText.isNotEmpty()) {
+        if (combined.isNotBlank()) {
             for (kw in keywords) {
-                if (nodeText.contains(kw)) {
+                if (combined.contains(kw)) {
                     return node
                 }
             }

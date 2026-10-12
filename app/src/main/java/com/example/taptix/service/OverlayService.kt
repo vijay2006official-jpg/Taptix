@@ -865,10 +865,6 @@ class OverlayService : Service() {
             }
         })
 
-        if (prefsRepo.getSettings().operatingMode == OperatingMode.SMART_ACCEPT) {
-            markerContainer.visibility = View.GONE
-        }
-
         targetViews.add(markerContainer)
         windowManager.addView(markerContainer, layoutParams)
     }

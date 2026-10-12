@@ -23,5 +23,5 @@ data class AppSettings(
     val nightModeDimIntensity: Float = 0.35f,
     val autoDimDelaySeconds: Int = 8,
     val pixelShiftBurnInProtection: Boolean = true,
-    val autoPauseOnKeyboard: Boolean = true
+    val autoPauseOnKeyboard: Boolean = false
 )

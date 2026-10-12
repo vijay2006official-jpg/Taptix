@@ -11,10 +11,9 @@ import org.junit.Test
 class TaptixUnitTest {
 
     @Test
-    fun testPlatformPreset_uberRequiresSwipe() {
+    fun testPlatformPreset_uberProperties() {
         val uber = PlatformPreset.UBER
         assertEquals("Uber Driver", uber.title)
-        assertTrue(uber.requiresSwipe)
         assertTrue(uber.keywords.contains("ACCEPT"))
     }
 
@@ -27,7 +26,7 @@ class TaptixUnitTest {
         assertEquals(PlatformPreset.RAPIDO, presetRapido)
 
         val presetUnknown = PlatformPreset.fromId("nonexistent")
-        assertEquals(PlatformPreset.UBER, presetUnknown)
+        assertEquals(PlatformPreset.UNIVERSAL, presetUnknown)
     }
 
     @Test

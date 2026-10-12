@@ -51,9 +51,10 @@ class UpdateManager(private val context: Context) {
             try {
                 val url = URL(serverUrl)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 4000
-                    readTimeout = 4000
+                    connectTimeout = 8000
+                    readTimeout = 8000
                     requestMethod = "GET"
+                    instanceFollowRedirects = true
                 }
 
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
@@ -86,11 +87,39 @@ class UpdateManager(private val context: Context) {
     ) {
         thread {
             try {
-                val url = URL(apkUrl)
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 10000
-                    readTimeout = 15000
-                    requestMethod = "GET"
+                var currentUrl = apkUrl
+                var conn: HttpURLConnection
+                var redirectCount = 0
+
+                // Follow HTTP 301/302 redirects (required for GitHub Releases -> AWS/Azure CDN)
+                while (true) {
+                    val url = URL(currentUrl)
+                    conn = (url.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 15000
+                        readTimeout = 20000
+                        requestMethod = "GET"
+                        instanceFollowRedirects = true
+                    }
+
+                    val code = conn.responseCode
+                    if (code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                        code == HttpURLConnection.HTTP_MOVED_PERM ||
+                        code == HttpURLConnection.HTTP_SEE_OTHER ||
+                        code == 307 || code == 308
+                    ) {
+                        val newLocation = conn.getHeaderField("Location")
+                        if (!newLocation.isNullOrEmpty() && redirectCount < 6) {
+                            currentUrl = newLocation
+                            redirectCount++
+                            continue
+                        }
+                    }
+                    break
+                }
+
+                if (conn.responseCode != HttpURLConnection.HTTP_OK) {
+                    mainHandler.post { onError("Server error: HTTP ${conn.responseCode}") }
+                    return@thread
                 }
 
                 val fileLength = conn.contentLength
@@ -107,11 +136,17 @@ class UpdateManager(private val context: Context) {
                             total += count
                             output.write(buffer, 0, count)
                             if (fileLength > 0) {
-                                val progress = ((total * 100) / fileLength).toInt()
+                                val progress = ((total * 100) / fileLength).toInt().coerceIn(0, 100)
                                 mainHandler.post { onProgress(progress) }
                             }
                         }
                     }
+                }
+
+                // Verify downloaded file size (should be > 1 MB)
+                if (apkFile.length() < 1_000_000) {
+                    mainHandler.post { onError("Incomplete APK download (${apkFile.length()} bytes)") }
+                    return@thread
                 }
 
                 mainHandler.post {

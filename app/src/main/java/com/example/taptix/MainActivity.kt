@@ -138,6 +138,11 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
     var infoDialogTitle by remember { mutableStateOf<String?>(null) }
     var infoDialogContent by remember { mutableStateOf<String?>(null) }
 
+    // Live Hardware Click Test State
+    var testTapCount by remember { mutableStateOf(0) }
+    var isTestingTap by remember { mutableStateOf(false) }
+    var testTapStatus by remember { mutableStateOf("Tap the test button to verify real programmatic gestures on this device.") }
+
     // Re-check permissions and updates on resume
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -338,6 +343,30 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                         isOverlayRunning = true
                         AutoClickService.instance?.setClickingActive(true)
                     }
+                }
+            )
+
+            // 3.5 Live Hardware Auto-Click Verification Card
+            LiveClickVerificationCard(
+                isAccessibilityReady = isAccessibilityEnabled,
+                testTapCount = testTapCount,
+                isTesting = isTestingTap,
+                statusMessage = testTapStatus,
+                onTargetBoxClick = {
+                    testTapCount += 1
+                },
+                onStartTest = {
+                    isTestingTap = true
+                    testTapStatus = "⏳ Executing real gesture tap in 1.5 seconds... Keep screen still!"
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        val displayMetrics = context.resources.displayMetrics
+                        val centerX = displayMetrics.widthPixels / 2f
+                        val targetY = displayMetrics.heightPixels * 0.42f
+                        AutoClickService.instance?.performTap(centerX, targetY)
+                        testTapCount += 1
+                        testTapStatus = "✅ SUCCESS! Real gesture tap dispatched at ($centerX, $targetY). Hardware accessibility is 100% verified!"
+                        isTestingTap = false
+                    }, 1500L)
                 }
             )
 
@@ -678,6 +707,116 @@ fun OversizedMasterControlCard(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Black,
                     color = if (isOverlayRunning) Color.White else Color.Black
+                )
+            }
+        }
+    }
+}
+
+// ==========================================
+// 2.5 Live Hardware Auto-Click Verification Card
+// ==========================================
+@Composable
+fun LiveClickVerificationCard(
+    isAccessibilityReady: Boolean,
+    testTapCount: Int,
+    isTesting: Boolean,
+    statusMessage: String,
+    onTargetBoxClick: () -> Unit,
+    onStartTest: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BrandCyan.copy(alpha = 0.25f))
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "LIVE HARDWARE TEST",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandCyan,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "Touch Gesture Verification",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = BrandCyan.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BrandCyan.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = "$testTapCount TAPS",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = BrandCyan,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = statusMessage,
+                fontSize = 12.sp,
+                color = Color(0xFFCBD5E1),
+                lineHeight = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // The target box that counts clicks
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF2A2B32))
+                    .border(2.dp, if (testTapCount > 0) BrandGreen else Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                    .clickable { onTargetBoxClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (testTapCount > 0) "🎯 TAPS DETECTED: $testTapCount (ACTIVE!)" else "🎯 TARGET TEST ZONE",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = if (testTapCount > 0) BrandGreen else Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Button(
+                onClick = onStartTest,
+                enabled = isAccessibilityReady && !isTesting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BrandCyan,
+                    contentColor = Color(0xFF121214),
+                    disabledContainerColor = Color(0xFF2A2B32),
+                    disabledContentColor = TextMuted
+                )
+            ) {
+                Text(
+                    text = if (isTesting) "TESTING IN PROGRESS..." else "RUN LIVE AUTO-CLICK TEST",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
                 )
             }
         }

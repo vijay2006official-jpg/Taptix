@@ -15,11 +15,11 @@ class PreferencesRepository(context: Context) {
 
     fun getSettings(): AppSettings {
         val interval = prefs.getLong(KEY_INTERVAL, 300L)
-        val modeStr = prefs.getString(KEY_MODE, OperatingMode.SMART_ACCEPT.name) ?: OperatingMode.SMART_ACCEPT.name
+        val modeStr = prefs.getString(KEY_MODE, OperatingMode.SINGLE_TARGET.name) ?: OperatingMode.SINGLE_TARGET.name
         val mode = try {
             OperatingMode.valueOf(modeStr)
         } catch (e: Exception) {
-            OperatingMode.SMART_ACCEPT
+            OperatingMode.SINGLE_TARGET
         }
 
         val presetId = prefs.getString(KEY_PRESET, PlatformPreset.UNIVERSAL.id) ?: PlatformPreset.UNIVERSAL.id
