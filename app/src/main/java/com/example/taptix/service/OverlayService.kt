@@ -858,6 +858,11 @@ class OverlayService : Service() {
 
                         point.x = layoutParams.x + 60
                         point.y = layoutParams.y + 60
+                        AutoClickService.instance?.updateTargetPoints(targetPoints)
+                        return true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        AutoClickService.instance?.updateTargetPoints(targetPoints)
                         return true
                     }
                 }

@@ -104,7 +104,7 @@ class AutoClickService : AccessibilityService() {
         }
 
         // Smart Accept Scan Handler: Runs on any window change or content update
-        if (isClickingActive.get() && settings.operatingMode == OperatingMode.SMART_ACCEPT) {
+        if (isClickingActive.get()) {
             if (!isKeyboardActive || !settings.autoPauseOnKeyboard) {
                 handleSmartAcceptScan(event, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
             }
@@ -127,10 +127,10 @@ class AutoClickService : AccessibilityService() {
             override fun run() {
                 if (isServiceRunning.get() && isClickingActive.get()) {
                     val settings = prefsRepo.getSettings()
-                    if (settings.operatingMode == OperatingMode.SMART_ACCEPT && (!isKeyboardActive || !settings.autoPauseOnKeyboard)) {
+                    if (!isKeyboardActive || !settings.autoPauseOnKeyboard) {
                         handleSmartAcceptScan(null, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
                     }
-                    mainHandler.postDelayed(this, 350L) // Scan every 350ms for instant reaction
+                    mainHandler.postDelayed(this, 300L) // Scan every 300ms for instant reaction
                 }
             }
         }
@@ -245,6 +245,10 @@ class AutoClickService : AccessibilityService() {
         scheduleNextClick()
     }
 
+    fun updateTargetPoints(targets: List<TargetPoint>) {
+        this.targetPoints = targets
+    }
+
     fun stopClicking() {
         isClickingActive.set(false)
         clickRunnable?.let { mainHandler.removeCallbacks(it) }
@@ -299,33 +303,45 @@ class AutoClickService : AccessibilityService() {
     /**
      * Programmatically performs a single tap at (x, y) coordinates.
      */
-    fun performTap(x: Float, y: Float, durationMs: Long = 50L) {
+    fun performTap(x: Float, y: Float, durationMs: Long = 60L, onResult: ((Boolean) -> Unit)? = null) {
         if (isKeyboardActive && prefsRepo.getSettings().autoPauseOnKeyboard) {
             Log.d(TAG, "Keyboard active, skipping tap at ($x, $y)")
+            onResult?.invoke(false)
             return
         }
-        if (x < 0 || y < 0) return
+        if (x < 0 || y < 0) {
+            onResult?.invoke(false)
+            return
+        }
 
         try {
             val path = Path().apply {
                 moveTo(x, y)
-                lineTo(x + 1f, y + 1f)
+                lineTo(x, y + 1f)
             }
 
-            val stroke = GestureDescription.StrokeDescription(path, 0, durationMs.coerceAtLeast(10L))
+            val stroke = GestureDescription.StrokeDescription(path, 0, durationMs.coerceIn(20L, 200L))
             val gesture = GestureDescription.Builder().addStroke(stroke).build()
 
-            dispatchGesture(gesture, object : GestureResultCallback() {
+            val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
                     Log.d(TAG, "Tap completed at ($x, $y)")
+                    mainHandler.post { onResult?.invoke(true) }
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
                     Log.w(TAG, "Tap cancelled at ($x, $y)")
+                    mainHandler.post { onResult?.invoke(false) }
                 }
             }, null)
+
+            if (!dispatched) {
+                Log.w(TAG, "dispatchGesture returned false for tap at ($x, $y)")
+                mainHandler.post { onResult?.invoke(false) }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "performTap error: ${e.message}")
+            mainHandler.post { onResult?.invoke(false) }
         }
     }
 

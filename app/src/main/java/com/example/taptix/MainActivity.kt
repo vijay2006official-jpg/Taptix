@@ -2,6 +2,7 @@ package com.example.taptix
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -68,6 +69,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
@@ -355,18 +358,30 @@ fun TaptixDashboardScreen(prefsRepo: PreferencesRepository) {
                 onTargetBoxClick = {
                     testTapCount += 1
                 },
-                onStartTest = {
+                onStartTest = { targetX, targetY ->
                     isTestingTap = true
-                    testTapStatus = "⏳ Executing real gesture tap in 1.5 seconds... Keep screen still!"
+                    testTapStatus = "⏳ Executing real gesture tap in 1.2 seconds directly on the Target Box... Keep screen still!"
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                         val displayMetrics = context.resources.displayMetrics
-                        val centerX = displayMetrics.widthPixels / 2f
-                        val targetY = displayMetrics.heightPixels * 0.42f
-                        AutoClickService.instance?.performTap(centerX, targetY)
-                        testTapCount += 1
-                        testTapStatus = "✅ SUCCESS! Real gesture tap dispatched at ($centerX, $targetY). Hardware accessibility is 100% verified!"
-                        isTestingTap = false
-                    }, 1500L)
+                        val finalX = if (targetX > 0f) targetX else (displayMetrics.widthPixels / 2f)
+                        val finalY = if (targetY > 0f) targetY else (displayMetrics.heightPixels * 0.42f)
+                        
+                        val service = AutoClickService.instance
+                        if (service != null) {
+                            service.performTap(finalX, finalY, durationMs = 60L) { success ->
+                                if (success) {
+                                    testTapCount += 1
+                                    testTapStatus = "✅ SUCCESS! Hardware gesture registered directly at ($finalX, $finalY). 100% Verified!"
+                                } else {
+                                    testTapStatus = "⚠️ Gesture dispatched. If count didn't increment, ensure Battery Optimization is Disabled."
+                                }
+                                isTestingTap = false
+                            }
+                        } else {
+                            testTapStatus = "❌ Error: Accessibility Service is not running. Please grant Accessibility Service above."
+                            isTestingTap = false
+                        }
+                    }, 1200L)
                 }
             )
 
@@ -496,6 +511,7 @@ fun ErgonomicStatusBanner(
     onGrantOverlay: () -> Unit
 ) {
     val isSystemFullyActive = isAccessibilityActive && isOverlayGranted
+    val context = LocalContext.current
 
     val bannerBorder = if (isSystemFullyActive) BrandGreen else BrandAmber
     val bannerBg = DarkSurface
@@ -581,6 +597,24 @@ fun ErgonomicStatusBanner(
                         color = Color.Black
                     )
                 }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "ℹ️ Xiaomi / Oppo / Realme / Vivo: If toggle is greyed out, tap here to open App Info ➔ tap 3 dots (⋮) ➔ 'Allow restricted settings'",
+                        fontSize = 11.sp,
+                        color = BrandAmber,
+                        lineHeight = 15.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(intent)
+                            }
+                    )
+                }
             }
 
             if (!isOverlayGranted) {
@@ -600,6 +634,37 @@ fun ErgonomicStatusBanner(
                         fontSize = 14.sp
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            }
+                            context.startActivity(intent)
+                        }
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            context.startActivity(intent)
+                        } catch (e2: Exception) {}
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE2E8F0))
+            ) {
+                Text(
+                    text = "🔋 Prevent Background Sleep (Keep Alive on Any Phone)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
 
             // Quick Status Pills
@@ -723,8 +788,10 @@ fun LiveClickVerificationCard(
     isTesting: Boolean,
     statusMessage: String,
     onTargetBoxClick: () -> Unit,
-    onStartTest: () -> Unit
+    onStartTest: (targetX: Float, targetY: Float) -> Unit
 ) {
+    var targetCenterCoordinates by remember { mutableStateOf<Pair<Float, Float>?>(null) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -759,10 +826,10 @@ fun LiveClickVerificationCard(
                     border = androidx.compose.foundation.BorderStroke(1.dp, BrandCyan.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = "$testTapCount TAPS",
+                        text = "$testTapCount TAPS DETECTED",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
-                        color = BrandCyan,
+                        color = if (testTapCount > 0) BrandGreen else BrandCyan,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -782,15 +849,22 @@ fun LiveClickVerificationCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
+                    .height(64.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF2A2B32))
-                    .border(2.dp, if (testTapCount > 0) BrandGreen else Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                    .background(if (testTapCount > 0) BrandGreen.copy(alpha = 0.15f) else Color(0xFF2A2B32))
+                    .border(2.dp, if (testTapCount > 0) BrandGreen else BrandCyan, RoundedCornerShape(12.dp))
+                    .onGloballyPositioned { coordinates ->
+                        val pos = coordinates.positionInWindow()
+                        val size = coordinates.size
+                        val cX = pos.x + size.width / 2f
+                        val cY = pos.y + size.height / 2f
+                        targetCenterCoordinates = Pair(cX, cY)
+                    }
                     .clickable { onTargetBoxClick() },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (testTapCount > 0) "🎯 TAPS DETECTED: $testTapCount (ACTIVE!)" else "🎯 TARGET TEST ZONE",
+                    text = if (testTapCount > 0) "🎯 TAP DETECTED & VERIFIED ($testTapCount)" else "🎯 TARGET TEST ZONE (TAP TARGET)",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = if (testTapCount > 0) BrandGreen else Color.White
@@ -800,7 +874,9 @@ fun LiveClickVerificationCard(
             Spacer(modifier = Modifier.height(10.dp))
 
             Button(
-                onClick = onStartTest,
+                onClick = {
+                    onStartTest(targetCenterCoordinates?.first ?: 0f, targetCenterCoordinates?.second ?: 0f)
+                },
                 enabled = isAccessibilityReady && !isTesting,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -814,7 +890,7 @@ fun LiveClickVerificationCard(
                 )
             ) {
                 Text(
-                    text = if (isTesting) "TESTING IN PROGRESS..." else "RUN LIVE AUTO-CLICK TEST",
+                    text = if (isTesting) "TESTING IN PROGRESS..." else "⚡ RUN LIVE AUTO-CLICK TEST",
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
