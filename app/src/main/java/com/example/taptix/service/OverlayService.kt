@@ -111,8 +111,16 @@ class OverlayService : Service() {
         // Start Auto-Dim Idle Timer if enabled
         resetAutoDimTimer()
 
-        // Automatically activate Auto-Accept engine
-        startClickingSequence()
+        // Automatically activate Auto-Accept engine — delay 800ms for AutoClickService to bind
+        Handler(Looper.getMainLooper()).postDelayed({
+            startClickingSequence()
+            // Retry once more after 2s in case accessibility service was slow to connect
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (!isPlaying && AutoClickService.instance != null) {
+                    startClickingSequence()
+                }
+            }, 2000L)
+        }, 800L)
     }
 
     private fun setupVoiceControl() {

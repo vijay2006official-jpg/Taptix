@@ -15,11 +15,11 @@ class PreferencesRepository(context: Context) {
 
     fun getSettings(): AppSettings {
         val interval = prefs.getLong(KEY_INTERVAL, 300L)
-        val modeStr = prefs.getString(KEY_MODE, OperatingMode.SINGLE_TARGET.name) ?: OperatingMode.SINGLE_TARGET.name
+        val modeStr = prefs.getString(KEY_MODE, OperatingMode.SMART_ACCEPT.name) ?: OperatingMode.SMART_ACCEPT.name
         val mode = try {
             OperatingMode.valueOf(modeStr)
         } catch (e: Exception) {
-            OperatingMode.SINGLE_TARGET
+            OperatingMode.SMART_ACCEPT
         }
 
         val presetId = prefs.getString(KEY_PRESET, PlatformPreset.UNIVERSAL.id) ?: PlatformPreset.UNIVERSAL.id
@@ -27,7 +27,7 @@ class PreferencesRepository(context: Context) {
 
         val customKeywords = prefs.getString(KEY_CUSTOM_KEYWORDS, "ACCEPT, CONFIRM, RIDE") ?: "ACCEPT, CONFIRM, RIDE"
         val autoPause = prefs.getBoolean(KEY_AUTO_PAUSE, true)
-        val motionLock = prefs.getBoolean(KEY_MOTION_LOCK, true)
+        val motionLock = prefs.getBoolean(KEY_MOTION_LOCK, false)  // Default OFF — many drivers not moving
         val tts = prefs.getBoolean(KEY_TTS, true)
 
         val autoLaunch = prefs.getBoolean(KEY_AUTO_LAUNCH, true)
@@ -39,7 +39,7 @@ class PreferencesRepository(context: Context) {
         val dimIntensity = prefs.getFloat(KEY_NIGHT_MODE_DIM_INTENSITY, 0.35f)
         val dimDelay = prefs.getInt(KEY_AUTO_DIM_DELAY, 8)
         val pixelShift = prefs.getBoolean(KEY_PIXEL_SHIFT, true)
-        val autoPauseKeyboard = prefs.getBoolean(KEY_AUTO_PAUSE_KEYBOARD, true)
+        val autoPauseKeyboard = prefs.getBoolean(KEY_AUTO_PAUSE_KEYBOARD, false)  // Default OFF
 
         return AppSettings(
             clickIntervalMs = interval,

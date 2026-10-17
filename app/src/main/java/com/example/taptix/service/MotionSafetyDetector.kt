@@ -66,7 +66,7 @@ class MotionSafetyDetector(
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     companion object {
-        private const val MOTION_THRESHOLD = 2.5
-        private const val STATIONARY_TIMEOUT_MS = 5000L
+        private const val MOTION_THRESHOLD = 6.0   // Raised: car engine vibration ~2-3 m/s², driving ~6+
+        private const val STATIONARY_TIMEOUT_MS = 10000L  // Wait 10s before unlocking after stopping
     }
 }
