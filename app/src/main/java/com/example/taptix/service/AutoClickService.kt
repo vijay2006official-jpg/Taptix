@@ -130,7 +130,7 @@ class AutoClickService : AccessibilityService() {
                     if (!isKeyboardActive || !settings.autoPauseOnKeyboard) {
                         handleSmartAcceptScan(null, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
                     }
-                    mainHandler.postDelayed(this, 300L) // Scan every 300ms for instant reaction
+                    mainHandler.postDelayed(this, 200L) // Scan every 200ms for fastest reaction
                 }
             }
         }
@@ -285,10 +285,9 @@ class AutoClickService : AccessibilityService() {
                 }
 
                 OperatingMode.SMART_ACCEPT -> {
+                    // Smart Accept: ONLY scan accessibility tree + dispatch tap on the found node.
+                    // Do NOT also tap the fixed overlay marker — that causes double-firing.
                     handleSmartAcceptScan(null, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
-                    targetPoints.firstOrNull()?.let { pt ->
-                        performTap(pt.x.toFloat(), pt.y.toFloat())
-                    }
                 }
             }
 
@@ -303,7 +302,7 @@ class AutoClickService : AccessibilityService() {
     /**
      * Programmatically performs a single tap at (x, y) coordinates.
      */
-    fun performTap(x: Float, y: Float, durationMs: Long = 60L, onResult: ((Boolean) -> Unit)? = null) {
+    fun performTap(x: Float, y: Float, durationMs: Long = 100L, onResult: ((Boolean) -> Unit)? = null) {
         if (isKeyboardActive && prefsRepo.getSettings().autoPauseOnKeyboard) {
             Log.d(TAG, "Keyboard active, skipping tap at ($x, $y)")
             onResult?.invoke(false)
@@ -465,7 +464,7 @@ class AutoClickService : AccessibilityService() {
         }
 
         // Step 3: Always also dispatch a physical gesture tap at the exact center of the button!
-        performTap(centerX, centerY, durationMs = 50L)
+        performTap(centerX, centerY, durationMs = 100L)
 
         // Step 4: Sensory driver feedback (Vibration, Audio TTS, and Screen Toast)
         notifyRideAccepted()
@@ -541,7 +540,7 @@ class AutoClickService : AccessibilityService() {
 
     companion object {
         private const val TAG = "AutoClickService"
-        private const val COOLDOWN_MS = 2500L
+        private const val COOLDOWN_MS = 1500L
 
         @Volatile
         var instance: AutoClickService? = null
