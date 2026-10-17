@@ -48,6 +48,7 @@ class AutoClickService : AccessibilityService() {
     private var currentTargetIndex = 0
 
     private var lastAcceptTime = 0L
+    private var hasSoundPlayed = false  // Sound plays ONCE per accept, then stays silent
     private var lastAutoLaunchedPackage: String = ""
     private var isKeyboardActive = false
 
@@ -385,33 +386,35 @@ class AutoClickService : AccessibilityService() {
         customKeywords: String,
         autoPause: Boolean
     ) {
-        val now = System.currentTimeMillis()
-        if (now - lastAcceptTime < COOLDOWN_MS) return // Cooldown to avoid rapid repeated accepts
+        val settings = prefsRepo.getSettings()
 
-        // Build comprehensive keywords list combining preset + universal
-        val targetKeywords = if (preset == PlatformPreset.CUSTOM) {
+        // Master Control gate — if master is OFF, do nothing at all
+        if (!settings.masterControlEnabled) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastAcceptTime < COOLDOWN_MS) return
+
+        // Build keyword list — in Ultra Mode accept EVERYTHING, bypass keywords
+        val targetKeywords = if (settings.ultraModeEnabled) {
+            // Ultra Mode: match any button-like node
+            listOf("ACCEPT", "CONFIRM", "GO", "TAKE", "RIDE", "OK", "YES", "START",
+                "CAPTAIN ACCEPT", "TAP TO ACCEPT", "SWIPE TO ACCEPT", "BOOKING",
+                "MATCH", "OFFER", "NEW RIDE", "RIDE REQUEST")
+        } else if (preset == PlatformPreset.CUSTOM) {
             customKeywords.split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }
         } else {
             (preset.keywords + PlatformPreset.UNIVERSAL.keywords).map { it.uppercase() }.distinct()
         }
 
-        // Collect all potential root nodes (active window, event source, and all top-level application windows)
+        // Collect all root nodes to scan
         val rootsToScan = mutableListOf<AccessibilityNodeInfo>()
         rootInActiveWindow?.let { rootsToScan.add(it) }
-
-        event?.source?.let { eventSource ->
-            if (!rootsToScan.contains(eventSource)) {
-                rootsToScan.add(eventSource)
-            }
-        }
-
+        event?.source?.let { src -> if (!rootsToScan.contains(src)) rootsToScan.add(src) }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 for (w in windows) {
                     val root = w.root
-                    if (root != null && !rootsToScan.contains(root)) {
-                        rootsToScan.add(root)
-                    }
+                    if (root != null && !rootsToScan.contains(root)) rootsToScan.add(root)
                 }
             }
         } catch (e: Exception) {
@@ -419,57 +422,102 @@ class AutoClickService : AccessibilityService() {
         }
 
         for (root in rootsToScan) {
-            if (findAndExecuteAccept(root, targetKeywords)) {
+            if (findAndExecuteAccept(root, targetKeywords, settings)) {
                 lastAcceptTime = now
-                if (autoPause) {
-                    // Maintain active scanning unless explicitly stopped by user
-                }
                 break
             }
         }
     }
 
-    private fun findAndExecuteAccept(rootNode: AccessibilityNodeInfo, keywords: List<String>): Boolean {
+    private fun findAndExecuteAccept(
+        rootNode: AccessibilityNodeInfo,
+        keywords: List<String>,
+        settings: com.example.taptix.data.AppSettings = prefsRepo.getSettings()
+    ): Boolean {
         val matchedNode = findNodeWithKeywords(rootNode, keywords) ?: return false
 
         val rect = Rect()
         matchedNode.getBoundsInScreen(rect)
         if (rect.width() <= 0 || rect.height() <= 0) return false
 
+        // Map Zone filter — check if driver is within the target zone
+        if (settings.mapZoneEnabled && !settings.ultraModeEnabled &&
+            settings.mapZoneLat != 0.0 && settings.mapZoneLng != 0.0) {
+            val driverLoc = getLastKnownLocation()
+            if (driverLoc != null) {
+                val distKm = haversineDistanceKm(
+                    driverLoc.first, driverLoc.second,
+                    settings.mapZoneLat, settings.mapZoneLng
+                )
+                if (distKm > settings.mapZoneRadiusKm) {
+                    Log.d(TAG, "Map Zone: booking outside zone (dist=${String.format("%.2f", distKm)}km, limit=${settings.mapZoneRadiusKm}km) — skipping")
+                    return false
+                }
+                Log.d(TAG, "Map Zone: ✅ within zone (dist=${String.format("%.2f", distKm)}km) — accepting")
+            }
+        }
+
         val centerX = rect.centerX().toFloat()
         val centerY = rect.centerY().toFloat()
+        Log.d(TAG, "🔥 Accept match: '${matchedNode.text ?: matchedNode.contentDescription}' at $rect")
 
-        Log.d(TAG, "🔥 Smart Accept match found! Text: '${matchedNode.text ?: matchedNode.contentDescription}' at $rect")
-
-        // Step 1: Direct native accessibility click on the clickable parent/ancestor
+        // Step 1: Native accessibility click
         var clickableNode: AccessibilityNodeInfo? = matchedNode
-        var actionClickSuccess = false
         while (clickableNode != null) {
             if (clickableNode.isClickable) {
-                actionClickSuccess = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                Log.d(TAG, "ACTION_CLICK executed on ${clickableNode.className}: success=$actionClickSuccess")
-                if (actionClickSuccess) break
+                val ok = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (ok) break
             }
             clickableNode = clickableNode.parent
         }
 
-        // Step 2: Check if this is a swipe slider (e.g., Uber or Rapido "Swipe to accept")
+        // Step 2: Swipe if slider type
         val nodeText = (matchedNode.text?.toString() ?: matchedNode.contentDescription?.toString() ?: "").uppercase()
         val isSwipe = nodeText.contains("SWIPE") || (rect.width() > 500 && rect.height() < 250)
-
         if (isSwipe) {
             val startX = (rect.left + 60).toFloat()
             val endX = (rect.right - 60).toFloat().coerceAtLeast(startX + 180f)
             performSwipe(startX, centerY, endX, centerY, durationMs = 280L)
         }
 
-        // Step 3: Always also dispatch a physical gesture tap at the exact center of the button!
+        // Step 3: Gesture tap
         performTap(centerX, centerY, durationMs = 100L)
 
-        // Step 4: Sensory driver feedback (Vibration, Audio TTS, and Screen Toast)
+        // Step 4: Feedback (sound plays ONCE, vibration once)
         notifyRideAccepted()
 
         return true
+    }
+
+    // Haversine formula — calculate distance in km between two GPS coordinates
+    private fun haversineDistanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val R = 6371.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    }
+
+    @Suppress("MissingPermission")
+    private fun getLastKnownLocation(): Pair<Double, Double>? {
+        return try {
+            val lm = getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+            val providers = listOf(
+                android.location.LocationManager.GPS_PROVIDER,
+                android.location.LocationManager.NETWORK_PROVIDER,
+                android.location.LocationManager.PASSIVE_PROVIDER
+            )
+            for (provider in providers) {
+                val loc = lm.getLastKnownLocation(provider)
+                if (loc != null) return Pair(loc.latitude, loc.longitude)
+            }
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not get location: ${e.message}")
+            null
+        }
     }
 
     private fun notifyRideAccepted() {
@@ -490,9 +538,12 @@ class AutoClickService : AccessibilityService() {
             Log.e(TAG, "Vibration notification failed: ${e.message}")
         }
 
-        // Audio TTS speech feedback
-        if (prefsRepo.getSettings().ttsFeedbackEnabled) {
+        // Audio TTS — plays ONCE per accept, then SILENT until next new booking
+        if (!hasSoundPlayed && prefsRepo.getSettings().ttsFeedbackEnabled) {
+            hasSoundPlayed = true
             ttsManager?.speak("Ride accepted by Taptix!")
+            // Reset flag after cooldown so it can speak again for next booking
+            mainHandler.postDelayed({ hasSoundPlayed = false }, COOLDOWN_MS + 2000L)
         }
 
         // UI Toast feedback

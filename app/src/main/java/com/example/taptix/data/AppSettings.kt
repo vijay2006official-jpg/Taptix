@@ -12,7 +12,7 @@ data class AppSettings(
     val platformPreset: PlatformPreset = PlatformPreset.UNIVERSAL,
     val customKeywords: String = "ACCEPT, CONFIRM, RIDE",
     val autoPauseOnAccept: Boolean = true,
-    val motionSafetyLockEnabled: Boolean = false,  // OFF by default — don't block stationary drivers
+    val motionSafetyLockEnabled: Boolean = false,
     val ttsFeedbackEnabled: Boolean = true,
     val swipeDurationMs: Long = 350L,
     val autoLaunchForTargetAppsEnabled: Boolean = true,
@@ -23,5 +23,13 @@ data class AppSettings(
     val nightModeDimIntensity: Float = 0.35f,
     val autoDimDelaySeconds: Int = 8,
     val pixelShiftBurnInProtection: Boolean = true,
-    val autoPauseOnKeyboard: Boolean = false  // OFF by default — don't block taps
+    val autoPauseOnKeyboard: Boolean = false,
+
+    // New v1.7 Settings
+    val masterControlEnabled: Boolean = false,   // Main ON/OFF master switch
+    val ultraModeEnabled: Boolean = false,        // Accept ALL bookings, bypass filters
+    val mapZoneEnabled: Boolean = false,          // Only accept bookings in drawn map zone
+    val mapZoneLat: Double = 0.0,                 // Center latitude of zone circle
+    val mapZoneLng: Double = 0.0,                 // Center longitude of zone circle
+    val mapZoneRadiusKm: Double = 2.0             // Radius in kilometers
 )

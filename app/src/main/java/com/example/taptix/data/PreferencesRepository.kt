@@ -39,7 +39,15 @@ class PreferencesRepository(context: Context) {
         val dimIntensity = prefs.getFloat(KEY_NIGHT_MODE_DIM_INTENSITY, 0.35f)
         val dimDelay = prefs.getInt(KEY_AUTO_DIM_DELAY, 8)
         val pixelShift = prefs.getBoolean(KEY_PIXEL_SHIFT, true)
-        val autoPauseKeyboard = prefs.getBoolean(KEY_AUTO_PAUSE_KEYBOARD, false)  // Default OFF
+        val autoPauseKeyboard = prefs.getBoolean(KEY_AUTO_PAUSE_KEYBOARD, false)
+
+        // v1.7 new settings
+        val masterControl = prefs.getBoolean(KEY_MASTER_CONTROL, false)
+        val ultraMode     = prefs.getBoolean(KEY_ULTRA_MODE, false)
+        val mapZoneOn     = prefs.getBoolean(KEY_MAP_ZONE_ENABLED, false)
+        val mapZoneLat    = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_LAT, java.lang.Double.doubleToRawLongBits(0.0)))
+        val mapZoneLng    = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_LNG, java.lang.Double.doubleToRawLongBits(0.0)))
+        val mapZoneRadius = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_RADIUS, java.lang.Double.doubleToRawLongBits(2.0)))
 
         return AppSettings(
             clickIntervalMs = interval,
@@ -57,7 +65,13 @@ class PreferencesRepository(context: Context) {
             nightModeDimIntensity = dimIntensity,
             autoDimDelaySeconds = dimDelay,
             pixelShiftBurnInProtection = pixelShift,
-            autoPauseOnKeyboard = autoPauseKeyboard
+            autoPauseOnKeyboard = autoPauseKeyboard,
+            masterControlEnabled = masterControl,
+            ultraModeEnabled = ultraMode,
+            mapZoneEnabled = mapZoneOn,
+            mapZoneLat = mapZoneLat,
+            mapZoneLng = mapZoneLng,
+            mapZoneRadiusKm = mapZoneRadius
         )
     }
 
@@ -143,8 +157,28 @@ class PreferencesRepository(context: Context) {
         private const val KEY_AUTO_DIM_DELAY = "key_auto_dim_delay"
         private const val KEY_PIXEL_SHIFT = "key_pixel_shift"
         private const val KEY_AUTO_PAUSE_KEYBOARD = "key_auto_pause_keyboard"
+        // v1.7 new keys
+        private const val KEY_MASTER_CONTROL = "key_master_control"
+        private const val KEY_ULTRA_MODE = "key_ultra_mode"
+        private const val KEY_MAP_ZONE_ENABLED = "key_map_zone_enabled"
+        private const val KEY_MAP_ZONE_LAT = "key_map_zone_lat"
+        private const val KEY_MAP_ZONE_LNG = "key_map_zone_lng"
+        private const val KEY_MAP_ZONE_RADIUS = "key_map_zone_radius"
 
         private const val DEFAULT_TARGET_PACKAGES =
             "com.ubercab.driver, com.olacabs.driver, com.olacabs.partner, com.rapido.captain, com.rapido.passenger, com.indriver, sinet.startup.inDriver, in.juspay.nammayatripartner, com.theporter.partner, me.lyft.driver, com.grabtaxi.driver2, com.dd.driver"
     }
+
+    // v1.7 Save methods
+    fun saveMasterControl(enabled: Boolean) = prefs.edit().putBoolean(KEY_MASTER_CONTROL, enabled).apply()
+    fun saveUltraMode(enabled: Boolean) = prefs.edit().putBoolean(KEY_ULTRA_MODE, enabled).apply()
+    fun saveMapZoneEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_MAP_ZONE_ENABLED, enabled).apply()
+    fun saveMapZone(lat: Double, lng: Double, radiusKm: Double) {
+        prefs.edit()
+            .putLong(KEY_MAP_ZONE_LAT, java.lang.Double.doubleToRawLongBits(lat))
+            .putLong(KEY_MAP_ZONE_LNG, java.lang.Double.doubleToRawLongBits(lng))
+            .putLong(KEY_MAP_ZONE_RADIUS, java.lang.Double.doubleToRawLongBits(radiusKm))
+            .apply()
+    }
 }
+
