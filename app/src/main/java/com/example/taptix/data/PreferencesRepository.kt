@@ -48,6 +48,7 @@ class PreferencesRepository(context: Context) {
         val mapZoneLat    = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_LAT, java.lang.Double.doubleToRawLongBits(0.0)))
         val mapZoneLng    = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_LNG, java.lang.Double.doubleToRawLongBits(0.0)))
         val mapZoneRadius = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_RADIUS, java.lang.Double.doubleToRawLongBits(2.0)))
+        val vibrationOn   = prefs.getBoolean(KEY_VIBRATION, true)
 
         return AppSettings(
             clickIntervalMs = interval,
@@ -71,7 +72,8 @@ class PreferencesRepository(context: Context) {
             mapZoneEnabled = mapZoneOn,
             mapZoneLat = mapZoneLat,
             mapZoneLng = mapZoneLng,
-            mapZoneRadiusKm = mapZoneRadius
+            mapZoneRadiusKm = mapZoneRadius,
+            vibrationOnAccept = vibrationOn
         )
     }
 
@@ -164,6 +166,7 @@ class PreferencesRepository(context: Context) {
         private const val KEY_MAP_ZONE_LAT = "key_map_zone_lat"
         private const val KEY_MAP_ZONE_LNG = "key_map_zone_lng"
         private const val KEY_MAP_ZONE_RADIUS = "key_map_zone_radius"
+        private const val KEY_VIBRATION = "key_vibration_on_accept"
 
         private const val DEFAULT_TARGET_PACKAGES =
             "com.ubercab.driver, com.olacabs.driver, com.olacabs.partner, com.rapido.captain, com.rapido.passenger, com.indriver, sinet.startup.inDriver, in.juspay.nammayatripartner, com.theporter.partner, me.lyft.driver, com.grabtaxi.driver2, com.dd.driver"
@@ -173,6 +176,7 @@ class PreferencesRepository(context: Context) {
     fun saveMasterControl(enabled: Boolean) = prefs.edit().putBoolean(KEY_MASTER_CONTROL, enabled).apply()
     fun saveUltraMode(enabled: Boolean) = prefs.edit().putBoolean(KEY_ULTRA_MODE, enabled).apply()
     fun saveMapZoneEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_MAP_ZONE_ENABLED, enabled).apply()
+    fun saveVibrationOnAccept(enabled: Boolean) = prefs.edit().putBoolean(KEY_VIBRATION, enabled).apply()
     fun saveMapZone(lat: Double, lng: Double, radiusKm: Double) {
         prefs.edit()
             .putLong(KEY_MAP_ZONE_LAT, java.lang.Double.doubleToRawLongBits(lat))

@@ -127,7 +127,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
                         Surface(shape = RoundedCornerShape(8.dp),
                             color = BrandCyan.copy(alpha = 0.12f)) {
-                            Text("v1.7 PRO",
+                            Text("v1.8 PRO",
                                 Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = BrandCyan)
                         }
@@ -221,7 +221,9 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
             // ── 6. SOUND & VIBRATION TOGGLES
             FeedbackCard(
                 ttsOn = appSettings.ttsFeedbackEnabled,
-                onTts = { prefsRepo.saveTtsFeedbackEnabled(it); appSettings = prefsRepo.getSettings() }
+                onTts = { prefsRepo.saveTtsFeedbackEnabled(it); appSettings = prefsRepo.getSettings() },
+                vibrationOn = appSettings.vibrationOnAccept,
+                onVibration = { prefsRepo.saveVibrationOnAccept(it); appSettings = prefsRepo.getSettings() }
             )
 
             // ── 7. LAUNCH FLOATING CONTROLS
@@ -507,7 +509,7 @@ fun SpeedCard(intervalMs: Long, onSelect: (Long) -> Unit) {
 
 // ─── FEEDBACK CARD ────────────────────────────────────────────────────────────
 @Composable
-fun FeedbackCard(ttsOn: Boolean, onTts: (Boolean) -> Unit) {
+fun FeedbackCard(ttsOn: Boolean, onTts: (Boolean) -> Unit, vibrationOn: Boolean, onVibration: (Boolean) -> Unit) {
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
@@ -539,7 +541,8 @@ fun FeedbackCard(ttsOn: Boolean, onTts: (Boolean) -> Unit) {
                 Text("Single strong vibration pulse",
                     color = TextMuted, fontSize = 11.sp)
             }
-            Text("ON", color = BrandGreen, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+            Switch(checked = vibrationOn, onCheckedChange = onVibration,
+                colors = SwitchDefaults.colors(checkedTrackColor = BrandGreen))
         }
 
         HorizontalDivider(color = DarkControl.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 4.dp))

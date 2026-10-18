@@ -31,5 +31,6 @@ data class AppSettings(
     val mapZoneEnabled: Boolean = false,          // Only accept bookings in drawn map zone
     val mapZoneLat: Double = 0.0,                 // Center latitude of zone circle
     val mapZoneLng: Double = 0.0,                 // Center longitude of zone circle
-    val mapZoneRadiusKm: Double = 2.0             // Radius in kilometers
+    val mapZoneRadiusKm: Double = 2.0,            // Radius in kilometers
+    val vibrationOnAccept: Boolean = true         // Vibrate on accept (can be toggled OFF)
 )

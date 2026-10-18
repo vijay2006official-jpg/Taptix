@@ -1,46 +1,31 @@
 package com.example.taptix.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+// Fixed dark color scheme — no dynamic wallpaper colors (prevents see-through background)
+private val TaptixDarkColorScheme = darkColorScheme(
+    primary          = Color(0xFF00E5FF),
+    onPrimary        = Color(0xFF000000),
+    secondary        = Color(0xFF1565C0),
+    onSecondary      = Color(0xFFFFFFFF),
+    background       = Color(0xFF0D0F14),
+    onBackground     = Color(0xFFFFFFFF),
+    surface          = Color(0xFF151821),
+    onSurface        = Color(0xFFFFFFFF),
+    surfaceVariant   = Color(0xFF1E2230),
+    onSurfaceVariant = Color(0xFF8892A4)
 )
 
 @Composable
 fun TaptixTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+        colorScheme = TaptixDarkColorScheme,
+        typography  = Typography,
+        content     = content
     )
 }
