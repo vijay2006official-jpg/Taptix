@@ -434,6 +434,27 @@ class AutoClickService : AccessibilityService() {
         keywords: List<String>,
         settings: com.example.taptix.data.AppSettings = prefsRepo.getSettings()
     ): Boolean {
+        // Step 0: Check negative/reject keywords in the window (if not in Ultra Mode)
+        val appPkg = rootNode.packageName?.toString() ?: ""
+        if (!settings.ultraModeEnabled && settings.negativeKeywords.isNotBlank()) {
+            val negativeList = settings.negativeKeywords.split(",")
+                .map { it.trim().uppercase() }
+                .filter { it.isNotEmpty() }
+            if (negativeList.isNotEmpty()) {
+                val foundNegative = findAnyKeywordInTree(rootNode, negativeList)
+                if (foundNegative != null) {
+                    Log.d(TAG, "Rejected by negative keyword: '$foundNegative' — skipping booking")
+                    com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+                        appName = getReadableAppName(appPkg),
+                        actionText = "Skipped booking",
+                        status = com.example.taptix.model.LogStatus.REJECTED_KEYWORD,
+                        details = "Blocked by keyword: $foundNegative"
+                    )
+                    return false
+                }
+            }
+        }
+
         val matchedNode = findNodeWithKeywords(rootNode, keywords) ?: return false
 
         val rect = Rect()
@@ -451,6 +472,12 @@ class AutoClickService : AccessibilityService() {
                 )
                 if (distKm > settings.mapZoneRadiusKm) {
                     Log.d(TAG, "Map Zone: booking outside zone (dist=${String.format("%.2f", distKm)}km, limit=${settings.mapZoneRadiusKm}km) — skipping")
+                    com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+                        appName = getReadableAppName(appPkg),
+                        actionText = "Outside Work Zone",
+                        status = com.example.taptix.model.LogStatus.OUTSIDE_ZONE,
+                        details = "Distance: ${String.format("%.1f", distKm)}km (Limit: ${settings.mapZoneRadiusKm}km)"
+                    )
                     return false
                 }
                 Log.d(TAG, "Map Zone: ✅ within zone (dist=${String.format("%.2f", distKm)}km) — accepting")
@@ -459,7 +486,16 @@ class AutoClickService : AccessibilityService() {
 
         val centerX = rect.centerX().toFloat()
         val centerY = rect.centerY().toFloat()
-        Log.d(TAG, "🔥 Accept match: '${matchedNode.text ?: matchedNode.contentDescription}' at $rect")
+        val matchText = (matchedNode.text ?: matchedNode.contentDescription ?: "Order").toString()
+        Log.d(TAG, "🔥 Accept match: '$matchText' at $rect")
+
+        // Record successful accept in activity audit log
+        com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+            appName = getReadableAppName(appPkg),
+            actionText = "Auto-Accepted: $matchText",
+            status = com.example.taptix.model.LogStatus.ACCEPTED,
+            details = if (settings.ultraModeEnabled) "Ultra Mode Active" else "Keyword Matched"
+        )
 
         // Step 1: Native accessibility click
         var clickableNode: AccessibilityNodeInfo? = matchedNode
@@ -588,8 +624,44 @@ class AutoClickService : AccessibilityService() {
                 return result
             }
         }
-
         return null
+    }
+
+    private fun findAnyKeywordInTree(node: AccessibilityNodeInfo, keywords: List<String>): String? {
+        val nodeText = (node.text?.toString() ?: "").uppercase()
+        val nodeDesc = (node.contentDescription?.toString() ?: "").uppercase()
+        val combined = "$nodeText $nodeDesc"
+
+        if (combined.isNotBlank()) {
+            for (kw in keywords) {
+                if (combined.contains(kw)) {
+                    return kw
+                }
+            }
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = findAnyKeywordInTree(child, keywords)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun getReadableAppName(packageName: String): String {
+        return when {
+            packageName.contains("uber", ignoreCase = true) -> "Uber Driver"
+            packageName.contains("ola", ignoreCase = true) -> "Ola Driver"
+            packageName.contains("rapido", ignoreCase = true) -> "Rapido Captain"
+            packageName.contains("indriver", ignoreCase = true) -> "inDrive"
+            packageName.contains("nammayatri", ignoreCase = true) -> "Namma Yatri"
+            packageName.contains("porter", ignoreCase = true) -> "Porter"
+            packageName.contains("swiggy", ignoreCase = true) -> "Swiggy"
+            packageName.contains("zomato", ignoreCase = true) -> "Zomato"
+            packageName.contains("shadowfax", ignoreCase = true) -> "Shadowfax"
+            packageName.isNotBlank() -> packageName.substringAfterLast('.')
+            else -> "Ride App"
+        }
     }
 
     companion object {

@@ -127,7 +127,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
                         Surface(shape = RoundedCornerShape(8.dp),
                             color = BrandCyan.copy(alpha = 0.12f)) {
-                            Text("v1.8 PRO",
+                            Text("v1.9 PRO",
                                 Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = BrandCyan)
                         }
@@ -226,7 +226,21 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                 onVibration = { prefsRepo.saveVibrationOnAccept(it); appSettings = prefsRepo.getSettings() }
             )
 
-            // ── 7. LAUNCH FLOATING CONTROLS
+            // ── 7. RULE & KEYWORD FILTERS (Captain Helper Style)
+            FilterRulesCard(
+                customKeywords = appSettings.customKeywords,
+                negativeKeywords = appSettings.negativeKeywords,
+                onSaveKeywords = { custom, negative ->
+                    prefsRepo.saveCustomKeywords(custom)
+                    prefsRepo.saveNegativeKeywords(negative)
+                    appSettings = prefsRepo.getSettings()
+                }
+            )
+
+            // ── 8. ACTIVITY AUDIT LOG (Recent Auto-Accept Decisions)
+            ActivityLogCard(context = context)
+
+            // ── 9. LAUNCH FLOATING CONTROLS
             Button(
                 onClick = {
                     if (!isAccessibilityOn || !isOverlayOn) return@Button
@@ -555,6 +569,184 @@ fun FeedbackCard(ttsOn: Boolean, onTts: (Boolean) -> Unit, vibrationOn: Boolean,
                     color = TextMuted, fontSize = 11.sp)
             }
             Text("AUTO", color = BrandCyan, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+        }
+    }
+}
+
+// ─── FILTER RULES CARD (Positive / Negative Keywords) ─────────────────────────
+@Composable
+fun FilterRulesCard(
+    customKeywords: String,
+    negativeKeywords: String,
+    onSaveKeywords: (String, String) -> Unit
+) {
+    var customText by remember(customKeywords) { mutableStateOf(customKeywords) }
+    var negativeText by remember(negativeKeywords) { mutableStateOf(negativeKeywords) }
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(DarkCard)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("⚙️ RULE & KEYWORD FILTERS", fontWeight = FontWeight.ExtraBold,
+                    color = Color.White, fontSize = 14.sp, letterSpacing = 1.sp)
+                Text("Auto-accept matching words & block unwanted trips",
+                    color = TextMuted, fontSize = 11.sp)
+            }
+            TextButton(onClick = { isExpanded = !isExpanded }) {
+                Text(if (isExpanded) "Hide" else "Edit", color = BrandCyan, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        if (isExpanded) {
+            Spacer(Modifier.height(4.dp))
+            Text("✅ Include / Accept Keywords (Comma-separated):",
+                color = BrandGreen, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            OutlinedTextField(
+                value = customText,
+                onValueChange = { customText = it },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = BrandGreen,
+                    unfocusedBorderColor = DarkControl
+                ),
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+            )
+
+            Spacer(Modifier.height(6.dp))
+            Text("⛔ Exclude / Reject Keywords (Skip orders with these words):",
+                color = BrandRed, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            OutlinedTextField(
+                value = negativeText,
+                onValueChange = { negativeText = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("e.g. CASH, LOW RATING, SHARED", color = TextMuted, fontSize = 12.sp) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = BrandRed,
+                    unfocusedBorderColor = DarkControl
+                ),
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+            )
+
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = { onSaveKeywords(customText, negativeText) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+            ) {
+                Text("💾 Save Filter Rules", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+// ─── ACTIVITY AUDIT LOG CARD ──────────────────────────────────────────────────
+@Composable
+fun ActivityLogCard(context: android.content.Context) {
+    val logManager = remember { com.example.taptix.data.ActivityLogManager.getInstance(context) }
+    var logs by remember { mutableStateOf(logManager.getLogs()) }
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(DarkCard)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("📋 ACTIVITY AUDIT LOG", fontWeight = FontWeight.ExtraBold,
+                    color = Color.White, fontSize = 14.sp, letterSpacing = 1.sp)
+                Text(
+                    if (logs.isEmpty()) "No trips detected yet" else "${logs.size} recent actions recorded",
+                    color = TextMuted, fontSize = 11.sp
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (logs.isNotEmpty()) {
+                    TextButton(onClick = {
+                        logManager.clearLogs()
+                        logs = emptyList()
+                    }) {
+                        Text("Clear", color = TextMuted, fontSize = 11.sp)
+                    }
+                }
+                TextButton(onClick = {
+                    logs = logManager.getLogs()
+                    isExpanded = !isExpanded
+                }) {
+                    Text(if (isExpanded) "Collapse" else "View", color = BrandCyan, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (isExpanded) {
+            if (logs.isEmpty()) {
+                Text("Logs will show every accepted and skipped booking with reasons.",
+                    color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
+            } else {
+                val timeFormat = remember { java.text.SimpleDateFormat("hh:mm:ss a", java.util.Locale.getDefault()) }
+                Column(
+                    Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    logs.take(15).forEach { item ->
+                        val (statusColor, statusIcon) = when (item.status) {
+                            com.example.taptix.model.LogStatus.ACCEPTED -> BrandGreen to "✅"
+                            com.example.taptix.model.LogStatus.REJECTED_KEYWORD -> BrandRed to "⛔"
+                            com.example.taptix.model.LogStatus.OUTSIDE_ZONE -> BrandAmber to "🗺️"
+                            com.example.taptix.model.LogStatus.SYSTEM_EVENT -> BrandCyan to "ℹ️"
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = DarkControl,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 10.dp, vertical = 8.dp).fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(statusIcon, fontSize = 12.sp)
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(item.appName, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                                    }
+                                    Text(item.actionText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    if (item.details.isNotBlank()) {
+                                        Text(item.details, color = TextMuted, fontSize = 10.sp)
+                                    }
+                                }
+                                Text(
+                                    timeFormat.format(java.util.Date(item.timestamp)),
+                                    color = TextMuted, fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -78,6 +78,19 @@
                 android:value="Floating control overlay for driver auto-clicker interaction" />
         </service>
 
+        <receiver
+            android:name=".widget.TaptixWidgetProvider"
+            android:exported="true"
+            android:label="Taptix Master Toggle">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.taptix.ACTION_TOGGLE_MASTER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/taptix_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>

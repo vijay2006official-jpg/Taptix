@@ -32,5 +32,7 @@ data class AppSettings(
     val mapZoneLat: Double = 0.0,                 // Center latitude of zone circle
     val mapZoneLng: Double = 0.0,                 // Center longitude of zone circle
     val mapZoneRadiusKm: Double = 2.0,            // Radius in kilometers
-    val vibrationOnAccept: Boolean = true         // Vibrate on accept (can be toggled OFF)
+    val vibrationOnAccept: Boolean = true,        // Vibrate on accept (can be toggled OFF)
+    val negativeKeywords: String = "CASH, LOW RATING, SHARED", // Exclude orders containing these terms
+    val preferredAreas: String = ""              // Comma-separated preferred area names
 )
