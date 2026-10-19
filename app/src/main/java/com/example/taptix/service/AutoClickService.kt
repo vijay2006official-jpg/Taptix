@@ -434,8 +434,19 @@ class AutoClickService : AccessibilityService() {
         keywords: List<String>,
         settings: com.example.taptix.data.AppSettings = prefsRepo.getSettings()
     ): Boolean {
-        // Step 0: Check negative/reject keywords in the window (if not in Ultra Mode)
+        // Step 0: Ensure the root node belongs to a supported ride app, launcher, or system test
         val appPkg = rootNode.packageName?.toString() ?: ""
+        if (appPkg.isNotBlank()) {
+            val targets = settings.targetAppPackages.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+            val isKnownTarget = targets.any { appPkg.lowercase().contains(it) || it.contains(appPkg.lowercase()) }
+            val isSelfOrTest = appPkg == packageName || appPkg.contains("example")
+            if (!isKnownTarget && !isSelfOrTest && !settings.ultraModeEnabled) {
+                // Not a supported ride partner app, ignore
+                return false
+            }
+        }
+
+        // Step 0b: Check negative/reject keywords in the window (if not in Ultra Mode)
         if (!settings.ultraModeEnabled && settings.negativeKeywords.isNotBlank()) {
             val negativeList = settings.negativeKeywords.split(",")
                 .map { it.trim().uppercase() }
