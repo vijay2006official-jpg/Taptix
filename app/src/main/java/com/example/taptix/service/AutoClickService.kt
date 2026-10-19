@@ -42,7 +42,6 @@ class AutoClickService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var clickRunnable: Runnable? = null
-    private var periodicScanRunnable: Runnable? = null
 
     private var targetPoints: List<TargetPoint> = emptyList()
     private var currentTargetIndex = 0
@@ -67,14 +66,11 @@ class AutoClickService : AccessibilityService() {
         isServiceRunning.set(true)
         isClickingActive.set(true)
         Log.d(TAG, "AutoClickService connected and activated")
-
-        startPeriodicScanIfNeeded()
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         isServiceRunning.set(false)
         stopClicking()
-        stopPeriodicScan()
         instance = null
         return super.onUnbind(intent)
     }
@@ -83,7 +79,6 @@ class AutoClickService : AccessibilityService() {
         super.onDestroy()
         isServiceRunning.set(false)
         stopClicking()
-        stopPeriodicScan()
         ttsManager?.shutdown()
         ttsManager = null
         instance = null
@@ -114,33 +109,9 @@ class AutoClickService : AccessibilityService() {
 
     fun setClickingActive(active: Boolean) {
         isClickingActive.set(active)
-        if (active) {
-            startPeriodicScanIfNeeded()
-        } else {
+        if (!active) {
             stopClicking()
-            stopPeriodicScan()
         }
-    }
-
-    private fun startPeriodicScanIfNeeded() {
-        stopPeriodicScan()
-        periodicScanRunnable = object : Runnable {
-            override fun run() {
-                if (isServiceRunning.get() && isClickingActive.get()) {
-                    val settings = prefsRepo.getSettings()
-                    if (!isKeyboardActive || !settings.autoPauseOnKeyboard) {
-                        handleSmartAcceptScan(null, settings.platformPreset, settings.customKeywords, settings.autoPauseOnAccept)
-                    }
-                    mainHandler.postDelayed(this, 200L) // Scan every 200ms for fastest reaction
-                }
-            }
-        }
-        mainHandler.post(periodicScanRunnable!!)
-    }
-
-    private fun stopPeriodicScan() {
-        periodicScanRunnable?.let { mainHandler.removeCallbacks(it) }
-        periodicScanRunnable = null
     }
 
     private fun checkKeyboardActive(event: AccessibilityEvent) {
@@ -434,13 +405,13 @@ class AutoClickService : AccessibilityService() {
         keywords: List<String>,
         settings: com.example.taptix.data.AppSettings = prefsRepo.getSettings()
     ): Boolean {
-        // Step 0: Ensure the root node belongs to a supported ride app, launcher, or system test
+        // Step 0: Ensure the root node belongs to a supported ride partner app (Rule 4: Exact match, no shortcuts)
         val appPkg = rootNode.packageName?.toString() ?: ""
         if (appPkg.isNotBlank()) {
             val targets = settings.targetAppPackages.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
-            val isKnownTarget = targets.any { appPkg.lowercase().contains(it) || it.contains(appPkg.lowercase()) }
-            val isSelfOrTest = appPkg == packageName || appPkg.contains("example")
-            if (!isKnownTarget && !isSelfOrTest && !settings.ultraModeEnabled) {
+            val isKnownTarget = targets.any { it.equals(appPkg.lowercase(), ignoreCase = true) }
+            val isDemoScreen = appPkg == packageName // Allow in-app demo screen testing only
+            if (!isKnownTarget && !isDemoScreen && !settings.ultraModeEnabled) {
                 // Not a supported ride partner app, ignore
                 return false
             }
@@ -476,64 +447,98 @@ class AutoClickService : AccessibilityService() {
         if (settings.mapZoneEnabled && !settings.ultraModeEnabled &&
             settings.mapZoneLat != 0.0 && settings.mapZoneLng != 0.0) {
             val driverLoc = getLastKnownLocation()
-            if (driverLoc != null) {
-                val distKm = haversineDistanceKm(
-                    driverLoc.first, driverLoc.second,
-                    settings.mapZoneLat, settings.mapZoneLng
+            if (driverLoc == null) {
+                // Rule 5: If location is unknown or stale, SKIP the booking and log an error. Never accept by default.
+                Log.w(TAG, "Map Zone active but location unknown/unavailable — skipping booking for safety")
+                com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+                    appName = getReadableAppName(appPkg),
+                    actionText = "Location Unavailable",
+                    status = com.example.taptix.model.LogStatus.ERROR,
+                    details = "GPS fix required for Map Zone"
                 )
-                if (distKm > settings.mapZoneRadiusKm) {
-                    Log.d(TAG, "Map Zone: booking outside zone (dist=${String.format("%.2f", distKm)}km, limit=${settings.mapZoneRadiusKm}km) — skipping")
-                    com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
-                        appName = getReadableAppName(appPkg),
-                        actionText = "Outside Work Zone",
-                        status = com.example.taptix.model.LogStatus.OUTSIDE_ZONE,
-                        details = "Distance: ${String.format("%.1f", distKm)}km (Limit: ${settings.mapZoneRadiusKm}km)"
-                    )
-                    return false
-                }
-                Log.d(TAG, "Map Zone: ✅ within zone (dist=${String.format("%.2f", distKm)}km) — accepting")
+                return false
             }
+
+            val distKm = haversineDistanceKm(
+                driverLoc.first, driverLoc.second,
+                settings.mapZoneLat, settings.mapZoneLng
+            )
+            if (distKm > settings.mapZoneRadiusKm) {
+                Log.d(TAG, "Map Zone: booking outside zone (dist=${String.format("%.2f", distKm)}km, limit=${settings.mapZoneRadiusKm}km) — skipping")
+                com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+                    appName = getReadableAppName(appPkg),
+                    actionText = "Outside Work Zone",
+                    status = com.example.taptix.model.LogStatus.OUTSIDE_ZONE,
+                    details = "Distance: ${String.format("%.1f", distKm)}km (Limit: ${settings.mapZoneRadiusKm}km)"
+                )
+                return false
+            }
+            Log.d(TAG, "Map Zone: ✅ within zone (dist=${String.format("%.2f", distKm)}km) — accepting")
         }
 
         val centerX = rect.centerX().toFloat()
         val centerY = rect.centerY().toFloat()
         val matchText = (matchedNode.text ?: matchedNode.contentDescription ?: "Order").toString()
-        Log.d(TAG, "🔥 Accept match: '$matchText' at $rect")
+        Log.d(TAG, "🔥 Accept candidate matched: '$matchText' at $rect")
 
-        // Record successful accept in activity audit log
+        // Log ATTEMPTED first (Rule 1)
         com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
             appName = getReadableAppName(appPkg),
-            actionText = "Auto-Accepted: $matchText",
-            status = com.example.taptix.model.LogStatus.ACCEPTED,
+            actionText = "Attempting accept: $matchText",
+            status = com.example.taptix.model.LogStatus.ATTEMPTED,
             details = if (settings.ultraModeEnabled) "Ultra Mode Active" else "Keyword Matched"
         )
 
-        // Step 1: Native accessibility click
-        var clickableNode: AccessibilityNodeInfo? = matchedNode
-        while (clickableNode != null) {
-            if (clickableNode.isClickable) {
-                val ok = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                if (ok) break
-            }
-            clickableNode = clickableNode.parent
-        }
-
-        // Step 2: Swipe if slider type
+        // Single tap path (Rule 2): Swipe if slider, else ACTION_CLICK, gesture tap only as fallback
         val nodeText = (matchedNode.text?.toString() ?: matchedNode.contentDescription?.toString() ?: "").uppercase()
         val isSwipe = nodeText.contains("SWIPE") || (rect.width() > 500 && rect.height() < 250)
+
+        var clickSucceeded = false
         if (isSwipe) {
             val startX = (rect.left + 60).toFloat()
             val endX = (rect.right - 60).toFloat().coerceAtLeast(startX + 180f)
             performSwipe(startX, centerY, endX, centerY, durationMs = 280L)
+            clickSucceeded = true
+        } else {
+            // Priority 1: Native accessibility click
+            var clickableNode: AccessibilityNodeInfo? = matchedNode
+            while (clickableNode != null) {
+                if (clickableNode.isClickable) {
+                    val ok = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    if (ok) {
+                        clickSucceeded = true
+                        break
+                    }
+                }
+                clickableNode = clickableNode.parent
+            }
+
+            // Priority 2: Gesture tap fallback ONLY if ACTION_CLICK failed or wasn't clickable
+            if (!clickSucceeded) {
+                performTap(centerX, centerY, durationMs = 100L)
+                clickSucceeded = true
+            }
         }
 
-        // Step 3: Gesture tap
-        performTap(centerX, centerY, durationMs = 100L)
-
-        // Step 4: Feedback (sound plays ONCE, vibration once)
-        notifyRideAccepted()
-
-        return true
+        if (clickSucceeded) {
+            // Rule 1: Log ACCEPTED only after click path executed
+            com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+                appName = getReadableAppName(appPkg),
+                actionText = "Accepted: $matchText",
+                status = com.example.taptix.model.LogStatus.ACCEPTED,
+                details = "Action confirmed"
+            )
+            notifyRideAccepted()
+            return true
+        } else {
+            com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+                appName = getReadableAppName(appPkg),
+                actionText = "Failed accept: $matchText",
+                status = com.example.taptix.model.LogStatus.FAILED,
+                details = "Node could not be clicked"
+            )
+            return false
+        }
     }
 
     // Haversine formula — calculate distance in km between two GPS coordinates
@@ -615,14 +620,22 @@ class AutoClickService : AccessibilityService() {
     }
 
     private fun findNodeWithKeywords(node: AccessibilityNodeInfo, keywords: List<String>): AccessibilityNodeInfo? {
-        val nodeText = (node.text?.toString() ?: "").uppercase()
-        val nodeDesc = (node.contentDescription?.toString() ?: "").uppercase()
-        val nodeId = (node.viewIdResourceName?.toString() ?: "").uppercase()
-        val combined = "$nodeText $nodeDesc $nodeId"
+        val nodeText = (node.text?.toString() ?: "").uppercase().trim()
+        val nodeDesc = (node.contentDescription?.toString() ?: "").uppercase().trim()
 
-        if (combined.isNotBlank()) {
+        if (nodeText.isNotBlank() || nodeDesc.isNotBlank()) {
+            val words = "$nodeText $nodeDesc".split(Regex("[^A-Z0-9]+")).filter { it.isNotBlank() }
             for (kw in keywords) {
-                if (combined.contains(kw)) {
+                val cleanKw = kw.trim().uppercase()
+                if (cleanKw.isBlank()) continue
+                val isMatch = if (cleanKw.contains(" ")) {
+                    // Multi-word exact phrase match (e.g. "TAP TO ACCEPT", "ACCEPT RIDE")
+                    nodeText.contains(cleanKw) || nodeDesc.contains(cleanKw)
+                } else {
+                    // Single word: MUST match exact whole word to prevent false hits like "GO" in "GOOGLE" or "OK" in "BOOKING"
+                    words.contains(cleanKw)
+                }
+                if (isMatch) {
                     return node
                 }
             }
@@ -639,15 +652,20 @@ class AutoClickService : AccessibilityService() {
     }
 
     private fun findAnyKeywordInTree(node: AccessibilityNodeInfo, keywords: List<String>): String? {
-        val nodeText = (node.text?.toString() ?: "").uppercase()
-        val nodeDesc = (node.contentDescription?.toString() ?: "").uppercase()
-        val combined = "$nodeText $nodeDesc"
+        val nodeText = (node.text?.toString() ?: "").uppercase().trim()
+        val nodeDesc = (node.contentDescription?.toString() ?: "").uppercase().trim()
 
-        if (combined.isNotBlank()) {
+        if (nodeText.isNotBlank() || nodeDesc.isNotBlank()) {
+            val words = "$nodeText $nodeDesc".split(Regex("[^A-Z0-9]+")).filter { it.isNotBlank() }
             for (kw in keywords) {
-                if (combined.contains(kw)) {
-                    return kw
+                val cleanKw = kw.trim().uppercase()
+                if (cleanKw.isBlank()) continue
+                val isMatch = if (cleanKw.contains(" ")) {
+                    nodeText.contains(cleanKw) || nodeDesc.contains(cleanKw)
+                } else {
+                    words.contains(cleanKw)
                 }
+                if (isMatch) return cleanKw
             }
         }
 

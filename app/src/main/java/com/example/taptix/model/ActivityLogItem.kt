@@ -13,7 +13,10 @@ data class ActivityLogItem(
 )
 
 enum class LogStatus {
+    ATTEMPTED,
     ACCEPTED,
+    FAILED,
+    ERROR,
     REJECTED_KEYWORD,
     OUTSIDE_ZONE,
     SYSTEM_EVENT

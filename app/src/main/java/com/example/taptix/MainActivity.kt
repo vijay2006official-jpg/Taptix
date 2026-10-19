@@ -645,7 +645,23 @@ fun FilterRulesCard(
 
             Spacer(Modifier.height(6.dp))
             Button(
-                onClick = { onSaveKeywords(customText, negativeText) },
+                onClick = {
+                    // Rule 11: Validate empty and duplicate entries
+                    val cleanCustom = customText.split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .joinToString(", ")
+                    val cleanNegative = negativeText.split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .joinToString(", ")
+                    customText = cleanCustom
+                    negativeText = cleanNegative
+                    onSaveKeywords(cleanCustom, cleanNegative)
+                    isExpanded = false
+                },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
@@ -714,9 +730,13 @@ fun ActivityLogCard(context: android.content.Context) {
                     logs.take(15).forEach { item ->
                         val (statusColor, statusIcon) = when (item.status) {
                             com.example.taptix.model.LogStatus.ACCEPTED -> BrandGreen to "✅"
+                            com.example.taptix.model.LogStatus.ATTEMPTED -> BrandCyan to "⏳"
+                            com.example.taptix.model.LogStatus.FAILED -> BrandRed to "❌"
+                            com.example.taptix.model.LogStatus.ERROR -> BrandRed to "⚠️"
                             com.example.taptix.model.LogStatus.REJECTED_KEYWORD -> BrandRed to "⛔"
                             com.example.taptix.model.LogStatus.OUTSIDE_ZONE -> BrandAmber to "🗺️"
                             com.example.taptix.model.LogStatus.SYSTEM_EVENT -> BrandCyan to "ℹ️"
+                            else -> BrandCyan to "•"
                         }
 
                         Surface(

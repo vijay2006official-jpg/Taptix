@@ -6,6 +6,7 @@ import com.example.taptix.model.PlatformPreset
 import com.example.taptix.model.TargetPoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class TaptixUnitTest {
@@ -56,9 +57,11 @@ class TaptixUnitTest {
         val settings = AppSettings()
         assertEquals(300L, settings.clickIntervalMs)
         assertEquals(OperatingMode.SMART_ACCEPT, settings.operatingMode)
-        assertEquals(PlatformPreset.UBER, settings.platformPreset)
+        assertEquals(PlatformPreset.UNIVERSAL, settings.platformPreset)
         assertTrue(settings.autoPauseOnAccept)
-        assertTrue(settings.motionSafetyLockEnabled)
+        assertFalse(settings.motionSafetyLockEnabled)
         assertTrue(settings.ttsFeedbackEnabled)
+        assertFalse(settings.masterControlEnabled)
+        assertTrue(settings.vibrationOnAccept)
     }
 }

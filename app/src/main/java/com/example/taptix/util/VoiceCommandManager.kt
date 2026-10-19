@@ -98,35 +98,50 @@ class VoiceCommandManager(
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
-            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
-            parseVoiceMatches(matches)
+            // Deliberately ignore partial results to avoid premature or accidental triggers
         }
 
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
+    private var lastVoiceCommandTime = 0L
+
     private fun parseVoiceMatches(matches: List<String>) {
+        val now = System.currentTimeMillis()
+        if (now - lastVoiceCommandTime < 1200L) return // Debounce duplicate recognitions
+
         val acceptKeywords = listOf("ACCEPT", "YES", "TAKE", "CONFIRM", "OK", "GET IT")
         val declineKeywords = listOf("DECLINE", "SKIP", "NO", "PASS", "REJECT")
-        val startKeywords = listOf("START", "GO", "PLAY", "ENABLE", "ON")
-        val stopKeywords = listOf("STOP", "PAUSE", "CANCEL", "DISABLE", "OFF")
+        val startKeywords = listOf("START", "GO", "PLAY", "ENABLE")
+        val stopKeywords = listOf("STOP", "PAUSE", "CANCEL", "DISABLE")
 
         for (text in matches) {
             val upper = text.uppercase(Locale.ROOT)
+            val words = upper.split(Regex("[^A-Z0-9]+")).filter { it.isNotBlank() }
+
+            val isAccept = acceptKeywords.any { kw -> if (kw.contains(" ")) upper.contains(kw) else words.contains(kw) }
+            val isDecline = declineKeywords.any { kw -> words.contains(kw) }
+            val isStart = startKeywords.any { kw -> words.contains(kw) }
+            val isStop = stopKeywords.any { kw -> words.contains(kw) }
+
             when {
-                acceptKeywords.any { upper.contains(it) } -> {
+                isAccept -> {
+                    lastVoiceCommandTime = now
                     onCommandDetected(VoiceCommand.ACCEPT)
                     return
                 }
-                declineKeywords.any { upper.contains(it) } -> {
+                isDecline -> {
+                    lastVoiceCommandTime = now
                     onCommandDetected(VoiceCommand.DECLINE)
                     return
                 }
-                startKeywords.any { upper.contains(it) } -> {
+                isStart -> {
+                    lastVoiceCommandTime = now
                     onCommandDetected(VoiceCommand.START)
                     return
                 }
-                stopKeywords.any { upper.contains(it) } -> {
+                isStop -> {
+                    lastVoiceCommandTime = now
                     onCommandDetected(VoiceCommand.STOP)
                     return
                 }
