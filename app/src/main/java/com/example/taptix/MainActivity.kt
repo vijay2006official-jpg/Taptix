@@ -127,7 +127,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
                         Surface(shape = RoundedCornerShape(8.dp),
                             color = BrandCyan.copy(alpha = 0.12f)) {
-                            Text("v1.9 PRO",
+                            Text("v2.0 PRO",
                                 Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = BrandCyan)
                         }
@@ -455,11 +455,13 @@ fun PlatformRow(selected: PlatformPreset, onSelect: (PlatformPreset) -> Unit) {
         Row(Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
-                PlatformPreset.UNIVERSAL to "🌐 All Apps",
-                PlatformPreset.UBER      to "🚖 Uber",
-                PlatformPreset.OLA       to "🟡 Ola",
-                PlatformPreset.RAPIDO    to "🟠 Rapido",
-                PlatformPreset.INDRIVER  to "🟣 inDrive"
+                PlatformPreset.UNIVERSAL  to "🌐 All Duties",
+                PlatformPreset.UBER       to "🚖 Uber",
+                PlatformPreset.OLA        to "🟡 Ola",
+                PlatformPreset.RAPIDO     to "🟠 Rapido",
+                PlatformPreset.INDRIVER   to "🟣 inDrive",
+                PlatformPreset.PORTER     to "🚚 Porter",
+                PlatformPreset.NAMMAYATRI to "🟢 Namma Yatri"
             ).forEach { (preset, label) ->
                 val sel = selected == preset
                 Surface(
