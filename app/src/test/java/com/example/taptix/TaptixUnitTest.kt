@@ -1,13 +1,16 @@
 package com.example.taptix
 
 import com.example.taptix.data.AppSettings
+import com.example.taptix.data.ScheduleConfig
+import com.example.taptix.model.AreaGroup
+import com.example.taptix.model.LogStatus
+import com.example.taptix.model.MapZone
 import com.example.taptix.model.OperatingMode
 import com.example.taptix.model.PlatformPreset
 import com.example.taptix.model.TargetPoint
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
+import org.junit.Assert.*
 import org.junit.Test
+import java.util.Calendar
 
 class TaptixUnitTest {
 
@@ -63,5 +66,134 @@ class TaptixUnitTest {
         assertTrue(settings.ttsFeedbackEnabled)
         assertFalse(settings.masterControlEnabled)
         assertTrue(settings.vibrationOnAccept)
+    }
+
+    @Test
+    fun testMapZone_serialization() {
+        val zone = MapZone(
+            id = "test-zone-1",
+            name = "Airport Terminal",
+            lat = 12.9716,
+            lng = 77.5946,
+            radiusKm = 3.5,
+            isEnabled = true
+        )
+        val json = zone.toJson()
+        assertEquals("test-zone-1", json.getString("id"))
+        assertEquals("Airport Terminal", json.getString("name"))
+        assertEquals(12.9716, json.getDouble("lat"), 0.0001)
+        assertEquals(77.5946, json.getDouble("lng"), 0.0001)
+        assertEquals(3.5, json.getDouble("radiusKm"), 0.0001)
+        assertTrue(json.getBoolean("isEnabled"))
+
+        val restored = MapZone.fromJson(json)
+        assertEquals(zone.id, restored.id)
+        assertEquals(zone.name, restored.name)
+        assertEquals(zone.lat, restored.lat, 0.0001)
+        assertEquals(zone.lng, restored.lng, 0.0001)
+        assertEquals(zone.radiusKm, restored.radiusKm, 0.0001)
+        assertEquals(zone.isEnabled, restored.isEnabled)
+    }
+
+    @Test
+    fun testAreaGroup_serialization() {
+        val group = AreaGroup(
+            id = "group-1",
+            name = "Morning Commute",
+            zoneIds = listOf("zone-a", "zone-b"),
+            isSelected = true
+        )
+        val json = group.toJson()
+        assertEquals("Morning Commute", json.getString("name"))
+        assertTrue(json.getBoolean("isSelected"))
+        assertEquals(2, json.getJSONArray("zoneIds").length())
+
+        val restored = AreaGroup.fromJson(json)
+        assertEquals(group.id, restored.id)
+        assertEquals(group.name, restored.name)
+        assertEquals(2, restored.zoneIds.size)
+        assertTrue(restored.isSelected)
+    }
+
+    @Test
+    fun testScheduleConfig_dayOfWeekAndWindowEvaluation() {
+        val config = ScheduleConfig(
+            isEnabled = true,
+            startHour = 9,
+            startMinute = 0,
+            endHour = 17,
+            endMinute = 0,
+            activeDays = setOf(Calendar.MONDAY, Calendar.TUESDAY)
+        )
+
+        // Mock calendar at 11:30 AM on Monday (Should be active)
+        val calMondayActive = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            set(Calendar.HOUR_OF_DAY, 11)
+            set(Calendar.MINUTE, 30)
+        }
+        assertTrue(config.isWithinActiveWindow(calMondayActive))
+
+        // Mock calendar at 8:30 PM on Monday (Outside active window)
+        val calMondayEvening = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            set(Calendar.HOUR_OF_DAY, 20)
+            set(Calendar.MINUTE, 30)
+        }
+        assertFalse(config.isWithinActiveWindow(calMondayEvening))
+
+        // Mock calendar on Sunday (Day not selected)
+        val calSunday = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
+            set(Calendar.HOUR_OF_DAY, 12)
+            set(Calendar.MINUTE, 0)
+        }
+        assertFalse(config.isWithinActiveWindow(calSunday))
+    }
+
+    @Test
+    fun testScheduleConfig_overnightShiftWindow() {
+        // Night shift from 21:00 (9 PM) to 04:00 (4 AM)
+        val nightConfig = ScheduleConfig(
+            isEnabled = true,
+            startHour = 21,
+            startMinute = 0,
+            endHour = 4,
+            endMinute = 0,
+            activeDays = setOf(Calendar.FRIDAY)
+        )
+
+        val calFridayMidnight = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.FRIDAY)
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 45)
+        }
+        assertTrue(nightConfig.isWithinActiveWindow(calFridayMidnight))
+
+        val calFridayEarlyMorning = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.FRIDAY)
+            set(Calendar.HOUR_OF_DAY, 2)
+            set(Calendar.MINUTE, 15)
+        }
+        assertTrue(nightConfig.isWithinActiveWindow(calFridayEarlyMorning))
+
+        val calFridayNoon = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.FRIDAY)
+            set(Calendar.HOUR_OF_DAY, 12)
+            set(Calendar.MINUTE, 0)
+        }
+        assertFalse(nightConfig.isWithinActiveWindow(calFridayNoon))
+    }
+
+    @Test
+    fun testLogStatus_enumIntegrity() {
+        val statuses = LogStatus.entries
+        assertTrue(statuses.contains(LogStatus.ATTEMPTED))
+        assertTrue(statuses.contains(LogStatus.ACCEPTED))
+        assertTrue(statuses.contains(LogStatus.FAILED))
+        assertTrue(statuses.contains(LogStatus.ERROR))
+        assertTrue(statuses.contains(LogStatus.REJECTED_KEYWORD))
+        assertTrue(statuses.contains(LogStatus.OUTSIDE_ZONE))
+        assertTrue(statuses.contains(LogStatus.SYSTEM_EVENT))
     }
 }

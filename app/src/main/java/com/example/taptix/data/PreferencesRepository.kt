@@ -173,6 +173,8 @@ class PreferencesRepository(context: Context) {
         private const val KEY_VIBRATION = "key_vibration_on_accept"
         private const val KEY_NEGATIVE_KEYWORDS = "key_negative_keywords"
         private const val KEY_PREFERRED_AREAS = "key_preferred_areas"
+        private const val KEY_MAP_ZONES_JSON = "key_map_zones_json"
+        private const val KEY_AREA_GROUPS_JSON = "key_area_groups_json"
 
         private const val DEFAULT_TARGET_PACKAGES =
             "com.ubercab.driver, com.olacabs.driver, com.olacabs.partner, com.rapido.captain, com.rapido.passenger, com.indriver, sinet.startup.inDriver, in.juspay.nammayatripartner, com.theporter.partner, me.lyft.driver, com.grabtaxi.driver2, com.dd.driver"
@@ -191,6 +193,119 @@ class PreferencesRepository(context: Context) {
             .putLong(KEY_MAP_ZONE_LNG, java.lang.Double.doubleToRawLongBits(lng))
             .putLong(KEY_MAP_ZONE_RADIUS, java.lang.Double.doubleToRawLongBits(radiusKm))
             .apply()
+    }
+
+    // Multi-zone management (Phase 2 Item 12)
+    fun getMapZones(): List<com.example.taptix.model.MapZone> {
+        val raw = prefs.getString(KEY_MAP_ZONES_JSON, null)
+        if (raw.isNullOrBlank()) {
+            val settings = getSettings()
+            if (settings.mapZoneLat != 0.0 && settings.mapZoneLng != 0.0) {
+                return listOf(
+                    com.example.taptix.model.MapZone(
+                        name = "Primary Zone",
+                        lat = settings.mapZoneLat,
+                        lng = settings.mapZoneLng,
+                        radiusKm = settings.mapZoneRadiusKm,
+                        isEnabled = true
+                    )
+                )
+            }
+            return emptyList()
+        }
+        return try {
+            val arr = org.json.JSONArray(raw)
+            val list = mutableListOf<com.example.taptix.model.MapZone>()
+            for (i in 0 until arr.length()) {
+                list.add(com.example.taptix.model.MapZone.fromJson(arr.getJSONObject(i)))
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveMapZones(zones: List<com.example.taptix.model.MapZone>) {
+        val arr = org.json.JSONArray()
+        zones.forEach { arr.put(it.toJson()) }
+        prefs.edit().putString(KEY_MAP_ZONES_JSON, arr.toString()).apply()
+
+        // Sync first active zone to legacy keys for backward compatibility
+        val firstActive = zones.firstOrNull { it.isEnabled } ?: zones.firstOrNull()
+        if (firstActive != null) {
+            saveMapZone(firstActive.lat, firstActive.lng, firstActive.radiusKm)
+        }
+    }
+
+    fun addOrUpdateMapZone(zone: com.example.taptix.model.MapZone) {
+        val current = getMapZones().toMutableList()
+        val index = current.indexOfFirst { it.id == zone.id }
+        if (index >= 0) {
+            current[index] = zone
+        } else {
+            current.add(zone)
+        }
+        saveMapZones(current)
+    }
+
+    fun deleteMapZone(id: String) {
+        val current = getMapZones().filterNot { it.id == id }
+        saveMapZones(current)
+    }
+
+    // Custom Area Lists (Phase 2 Item 13)
+    fun getAreaGroups(): List<com.example.taptix.model.AreaGroup> {
+        val raw = prefs.getString(KEY_AREA_GROUPS_JSON, null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(raw)
+            val list = mutableListOf<com.example.taptix.model.AreaGroup>()
+            for (i in 0 until arr.length()) {
+                list.add(com.example.taptix.model.AreaGroup.fromJson(arr.getJSONObject(i)))
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveAreaGroups(groups: List<com.example.taptix.model.AreaGroup>) {
+        val arr = org.json.JSONArray()
+        groups.forEach { arr.put(it.toJson()) }
+        prefs.edit().putString(KEY_AREA_GROUPS_JSON, arr.toString()).apply()
+    }
+
+    fun selectAreaGroup(groupId: String?) {
+        val groups = getAreaGroups().map {
+            it.copy(isSelected = (it.id == groupId))
+        }
+        saveAreaGroups(groups)
+    }
+
+    /**
+     * Resolves the currently active list of zones to enforce during auto-accept.
+     */
+    fun getActiveZones(): List<com.example.taptix.model.MapZone> {
+        val allZones = getMapZones()
+        val selectedGroup = getAreaGroups().firstOrNull { it.isSelected }
+        return if (selectedGroup != null) {
+            allZones.filter { it.id in selectedGroup.zoneIds && it.isEnabled }
+        } else {
+            allZones.filter { it.isEnabled }
+        }
+    }
+
+    // Schedule window settings (Phase 5 Item 30)
+    fun getScheduleConfig(): ScheduleConfig {
+        val raw = prefs.getString("key_schedule_config_json", null) ?: return ScheduleConfig()
+        return try {
+            ScheduleConfig.fromJson(org.json.JSONObject(raw))
+        } catch (e: Exception) {
+            ScheduleConfig()
+        }
+    }
+
+    fun saveScheduleConfig(config: ScheduleConfig) {
+        prefs.edit().putString("key_schedule_config_json", config.toJson().toString()).apply()
     }
 }
 

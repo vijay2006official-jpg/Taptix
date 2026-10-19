@@ -1,28 +1,46 @@
 package com.example.taptix.util
 
 import android.content.Context
+import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import java.util.Locale
 
 /**
- * Native TextToSpeech manager for driver audio feedback.
+ * TextToSpeech manager for driver audio feedback with language fallback and audio focus handling.
  */
 class TtsManager(context: Context) : TextToSpeech.OnInitListener {
 
     private var tts: TextToSpeech? = TextToSpeech(context.applicationContext, this)
     private var isInitialized = false
+    private var currentLanguageTag: String = "en"
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val result = tts?.setLanguage(Locale.US)
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.e(TAG, "Language not supported for TTS")
-            } else {
-                isInitialized = true
-            }
+            setLanguage(currentLanguageTag)
+            isInitialized = true
         } else {
             Log.e(TAG, "Initialization of TextToSpeech failed with status: $status")
+        }
+    }
+
+    fun setLanguage(languageTag: String) {
+        currentLanguageTag = languageTag
+        val targetLocale = when (languageTag.lowercase()) {
+            "hi" -> Locale.forLanguageTag("hi-IN")
+            "ta" -> Locale.forLanguageTag("ta-IN")
+            else -> Locale.US
+        }
+
+        try {
+            val result = tts?.setLanguage(targetLocale)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w(TAG, "Language $languageTag not fully supported, falling back to US English")
+                tts?.setLanguage(Locale.US)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting TTS language: ${e.message}")
+            tts?.setLanguage(Locale.US)
         }
     }
 
@@ -30,9 +48,9 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     private var audioFocusRequest: android.media.AudioFocusRequest? = null
 
     fun speak(text: String) {
-        if (!isInitialized) return
+        if (!isInitialized || text.isBlank()) return
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val playbackAttributes = android.media.AudioAttributes.Builder()
                     .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
@@ -57,7 +75,7 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
 
     fun shutdown() {
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
             } else {
                 @Suppress("DEPRECATION")

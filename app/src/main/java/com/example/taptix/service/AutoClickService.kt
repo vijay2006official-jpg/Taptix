@@ -362,6 +362,10 @@ class AutoClickService : AccessibilityService() {
         // Master Control gate — if master is OFF, do nothing at all
         if (!settings.masterControlEnabled) return
 
+        // Shift Schedule gate (Phase 5 Item 30) — if outside scheduled shift, do nothing
+        val schedule = prefsRepo.getScheduleConfig()
+        if (!schedule.isWithinActiveWindow()) return
+
         val now = System.currentTimeMillis()
         if (now - lastAcceptTime < COOLDOWN_MS) return
 
@@ -443,37 +447,67 @@ class AutoClickService : AccessibilityService() {
         matchedNode.getBoundsInScreen(rect)
         if (rect.width() <= 0 || rect.height() <= 0) return false
 
-        // Map Zone filter — check if driver is within the target zone
-        if (settings.mapZoneEnabled && !settings.ultraModeEnabled &&
-            settings.mapZoneLat != 0.0 && settings.mapZoneLng != 0.0) {
-            val driverLoc = getLastKnownLocation()
-            if (driverLoc == null) {
-                // Rule 5: If location is unknown or stale, SKIP the booking and log an error. Never accept by default.
-                Log.w(TAG, "Map Zone active but location unknown/unavailable — skipping booking for safety")
-                com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
-                    appName = getReadableAppName(appPkg),
-                    actionText = "Location Unavailable",
-                    status = com.example.taptix.model.LogStatus.ERROR,
-                    details = "GPS fix required for Map Zone"
-                )
-                return false
-            }
+        // Map Zone filter — check if driver is within any active target zone (Custom Area Lists / Multi-Zone)
+        if (settings.mapZoneEnabled && !settings.ultraModeEnabled) {
+            val activeZones = prefsRepo.getActiveZones()
+            val hasActiveZones = activeZones.isNotEmpty() || (settings.mapZoneLat != 0.0 && settings.mapZoneLng != 0.0)
 
-            val distKm = haversineDistanceKm(
-                driverLoc.first, driverLoc.second,
-                settings.mapZoneLat, settings.mapZoneLng
-            )
-            if (distKm > settings.mapZoneRadiusKm) {
-                Log.d(TAG, "Map Zone: booking outside zone (dist=${String.format("%.2f", distKm)}km, limit=${settings.mapZoneRadiusKm}km) — skipping")
-                com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
-                    appName = getReadableAppName(appPkg),
-                    actionText = "Outside Work Zone",
-                    status = com.example.taptix.model.LogStatus.OUTSIDE_ZONE,
-                    details = "Distance: ${String.format("%.1f", distKm)}km (Limit: ${settings.mapZoneRadiusKm}km)"
-                )
-                return false
+            if (hasActiveZones) {
+                val driverLoc = getLastKnownLocation()
+                if (driverLoc == null) {
+                    // Rule 5: If location is unknown or stale, SKIP the booking and log an error. Never accept by default.
+                    Log.w(TAG, "Map Zone active but location unknown/unavailable — skipping booking for safety")
+                    com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+                        appName = getReadableAppName(appPkg),
+                        actionText = "Location Unavailable",
+                        status = com.example.taptix.model.LogStatus.ERROR,
+                        details = "GPS fix required for Map Zone"
+                    )
+                    return false
+                }
+
+                val zonesToCheck = if (activeZones.isNotEmpty()) {
+                    activeZones
+                } else {
+                    listOf(
+                        com.example.taptix.model.MapZone(
+                            name = "Primary Zone",
+                            lat = settings.mapZoneLat,
+                            lng = settings.mapZoneLng,
+                            radiusKm = settings.mapZoneRadiusKm,
+                            isEnabled = true
+                        )
+                    )
+                }
+
+                var isInsideAnyZone = false
+                var closestZoneName = ""
+                var minDistanceKm = Double.MAX_VALUE
+
+                for (zone in zonesToCheck) {
+                    val distKm = haversineDistanceKm(driverLoc.first, driverLoc.second, zone.lat, zone.lng)
+                    if (distKm < minDistanceKm) {
+                        minDistanceKm = distKm
+                        closestZoneName = zone.name
+                    }
+                    if (distKm <= zone.radiusKm) {
+                        isInsideAnyZone = true
+                        break
+                    }
+                }
+
+                if (!isInsideAnyZone) {
+                    Log.d(TAG, "Map Zone: booking outside all active zones (closest=$closestZoneName, dist=${String.format("%.2f", minDistanceKm)}km) — skipping")
+                    com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+                        appName = getReadableAppName(appPkg),
+                        actionText = "Outside Work Zone",
+                        status = com.example.taptix.model.LogStatus.OUTSIDE_ZONE,
+                        details = "Closest: $closestZoneName (${String.format("%.1f", minDistanceKm)}km)"
+                    )
+                    return false
+                }
+                Log.d(TAG, "Map Zone: ✅ within active zone — accepting")
             }
-            Log.d(TAG, "Map Zone: ✅ within zone (dist=${String.format("%.2f", distKm)}km) — accepting")
         }
 
         val centerX = rect.centerX().toFloat()

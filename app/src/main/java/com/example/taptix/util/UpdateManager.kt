@@ -47,6 +47,11 @@ class UpdateManager(private val context: Context) {
     }
 
     fun checkForUpdate(serverUrl: String, onResult: (UpdateInfo?) -> Unit) {
+        if (!serverUrl.startsWith("https://", ignoreCase = true)) {
+            Log.e("UpdateManager", "Rejected insecure HTTP update URL: $serverUrl")
+            onResult(null)
+            return
+        }
         thread {
             try {
                 val url = URL(serverUrl)
@@ -85,6 +90,10 @@ class UpdateManager(private val context: Context) {
         onComplete: () -> Unit,
         onError: (String) -> Unit
     ) {
+        if (!apkUrl.startsWith("https://", ignoreCase = true)) {
+            onError("Insecure HTTP update URL rejected. Strict HTTPS required.")
+            return
+        }
         thread {
             try {
                 var currentUrl = apkUrl

@@ -1,10 +1,15 @@
 package com.example.taptix
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,17 +38,26 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.taptix.data.ActivityLogManager
+import com.example.taptix.data.BackupRestoreManager
 import com.example.taptix.data.PreferencesRepository
+import com.example.taptix.model.LogStatus
 import com.example.taptix.model.PlatformPreset
 import com.example.taptix.service.AutoClickService
 import com.example.taptix.service.OverlayService
+import com.example.taptix.ui.components.AccessibilityDisclosureDialog
+import com.example.taptix.ui.components.BatteryGuidanceDialog
+import com.example.taptix.ui.components.DailyStatsCard
+import com.example.taptix.ui.components.DiagnosticItem
+import com.example.taptix.ui.components.ScheduleDialog
+import com.example.taptix.ui.components.SelfCheckCard
 import com.example.taptix.ui.theme.TaptixTheme
 import com.example.taptix.util.UpdateInfo
 import com.example.taptix.util.UpdateManager
@@ -77,26 +91,97 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
     var isAccessibilityOn  by remember { mutableStateOf(false) }
     var isOverlayOn        by remember { mutableStateOf(false) }
+    var isLocationOn       by remember { mutableStateOf(false) }
+    var isNotificationOn   by remember { mutableStateOf(false) }
+    var isBatteryOptIgnored by remember { mutableStateOf(true) }
+    var isMicOn            by remember { mutableStateOf(false) }
     var isServiceRunning   by remember { mutableStateOf(false) }
     var appSettings        by remember { mutableStateOf(prefsRepo.getSettings()) }
+    var scheduleConfig     by remember { mutableStateOf(prefsRepo.getScheduleConfig()) }
+
+    var showAccessibilityDisclosure by remember { mutableStateOf(false) }
+    var showBatteryGuidance by remember { mutableStateOf(false) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
 
     val updateManager   = remember { UpdateManager(context) }
     var availableUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
     var updateProgress  by remember { mutableStateOf(-1f) }
     var updateStatus    by remember { mutableStateOf("") }
 
+    val logManager = remember { ActivityLogManager.getInstance(context) }
+    var activityLogs by remember { mutableStateOf(logManager.getLogs()) }
+
+    fun refreshDiagnostics() {
+        isAccessibilityOn = AutoClickService.isAccessibilityPermissionGranted(context) && AutoClickService.isServiceRunning()
+        isOverlayOn       = Settings.canDrawOverlays(context)
+        isServiceRunning  = OverlayService.instance != null
+        appSettings       = prefsRepo.getSettings()
+        scheduleConfig    = prefsRepo.getScheduleConfig()
+        activityLogs      = logManager.getLogs()
+
+        isLocationOn = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+        isNotificationOn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else true
+
+        isMicOn = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        isBatteryOptIgnored = pm?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+    }
+
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                isAccessibilityOn = AutoClickService.isAccessibilityPermissionGranted(context) && AutoClickService.isServiceRunning()
-                isOverlayOn       = Settings.canDrawOverlays(context)
-                isServiceRunning  = OverlayService.instance != null
-                appSettings       = prefsRepo.getSettings()
+                refreshDiagnostics()
                 updateManager.checkForUpdate("https://raw.githubusercontent.com/vijay2006official-jpg/Taptix/main/version.json") { availableUpdate = it }
             }
         }
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    // Dialogs
+    if (showAccessibilityDisclosure) {
+        AccessibilityDisclosureDialog(
+            onAgree = {
+                showAccessibilityDisclosure = false
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            },
+            onDismiss = { showAccessibilityDisclosure = false }
+        )
+    }
+
+    if (showBatteryGuidance) {
+        BatteryGuidanceDialog(
+            onDismiss = { showBatteryGuidance = false },
+            onOpenBatterySettings = {
+                showBatteryGuidance = false
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            }
+        )
+    }
+
+    if (showScheduleDialog) {
+        ScheduleDialog(
+            initialConfig = scheduleConfig,
+            onSave = { cfg ->
+                prefsRepo.saveScheduleConfig(cfg)
+                scheduleConfig = cfg
+                showScheduleDialog = false
+                Toast.makeText(context, "Schedule saved", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showScheduleDialog = false }
+        )
     }
 
     Scaffold(
@@ -105,31 +190,28 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF080B12)),
                 title = {
-                    Row(Modifier.fillMaxWidth().padding(end = 8.dp),
+                    Row(
+                        Modifier.fillMaxWidth().padding(end = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically) {
-
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Logo circle
-                            Box(Modifier.size(38.dp).clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(BrandCyan, Color(0xFF0050CC)))),
-                                contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier.size(38.dp).clip(CircleShape)
+                                    .background(Brush.radialGradient(listOf(BrandCyan, Color(0xFF0050CC)))),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text("⚡", fontSize = 20.sp)
                             }
                             Spacer(Modifier.width(10.dp))
                             Column {
-                                Text("TAPTIX", fontWeight = FontWeight.Black,
-                                    fontSize = 20.sp, color = Color.White, letterSpacing = 2.sp)
-                                Text("Accessibility Protocol v2.0",
-                                    fontSize = 10.sp, color = TextMuted)
+                                Text("TAPTIX", fontWeight = FontWeight.Black, fontSize = 20.sp, color = Color.White, letterSpacing = 2.sp)
+                                Text("Autonomous Captain Engine v2.0", fontSize = 10.sp, color = TextMuted)
                             }
                         }
 
-                        Surface(shape = RoundedCornerShape(8.dp),
-                            color = BrandCyan.copy(alpha = 0.12f)) {
-                            Text("v2.0 PRO",
-                                Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = BrandCyan)
+                        Surface(shape = RoundedCornerShape(8.dp), color = BrandCyan.copy(alpha = 0.12f)) {
+                            Text("PRO", Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = BrandCyan)
                         }
                     }
                 }
@@ -156,22 +238,35 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                 }
             }
 
-            // ── Permission warning
-            if (!isAccessibilityOn || !isOverlayOn) {
-                PermissionWarningBar(isAccessibilityOn, isOverlayOn,
-                    onFixA = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
-                    onFixO = { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:${context.packageName}"))) }
-                )
-            }
+            // ── 0. DIAGNOSTICS & PERMISSION SELF-CHECK (Phase 4 Item 27)
+            SelfCheckCard(
+                diagnostics = listOf(
+                    DiagnosticItem("Accessibility Engine", "Required to detect and tap accept buttons", isAccessibilityOn) {
+                        showAccessibilityDisclosure = true
+                    },
+                    DiagnosticItem("Floating Overlay", "Required for on-screen driver controls", isOverlayOn) {
+                        context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
+                    },
+                    DiagnosticItem("GPS Location", "Required for geofenced map zone filtering", isLocationOn) {
+                        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    },
+                    DiagnosticItem("Battery Exemption", "Prevents OEM systems from pausing auto-accept", isBatteryOptIgnored) {
+                        showBatteryGuidance = true
+                    }
+                ),
+                onOpenBatteryGuide = { showBatteryGuidance = true }
+            )
 
-            // ── 1. MASTER CONTROL CARD (Blue)
+            // ── 1. MASTER CONTROL CARD
             MasterControlCard(
                 isOn = appSettings.masterControlEnabled,
                 isServiceRunning = isServiceRunning,
                 hasPermissions   = isAccessibilityOn && isOverlayOn,
                 onToggle = { wantOn ->
-                    if (wantOn && (!isAccessibilityOn || !isOverlayOn)) return@MasterControlCard
+                    if (wantOn && (!isAccessibilityOn || !isOverlayOn)) {
+                        Toast.makeText(context, "Please enable Accessibility & Overlay permissions first", Toast.LENGTH_SHORT).show()
+                        return@MasterControlCard
+                    }
                     prefsRepo.saveMasterControl(wantOn)
                     if (wantOn) {
                         val i = Intent(context, OverlayService::class.java)
@@ -185,7 +280,76 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                 }
             )
 
-            // ── 2. ULTRA MODE CARD (Dark)
+            // ── 2. AUTO-ACCEPT SIMULATOR (Phase 2 Item 18)
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable {
+                    context.startActivity(Intent(context, DemoActivity::class.java))
+                },
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF38BDF8))
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(
+                            Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF0284C7)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🧪", fontSize = 20.sp)
+                        }
+                        Column {
+                            Text("TEST IN DEMO SIMULATOR", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                            Text("Simulate live ride offers & measure tap speed", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                        }
+                    }
+                    Text("Open ➔", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+
+            // ── 3. SHIFT SCHEDULE & DAILY STATS (Phase 5 Item 30 & 31)
+            DailyStatsCard(
+                logs = activityLogs,
+                onResetStats = {
+                    logManager.clearLogs()
+                    activityLogs = emptyList()
+                    Toast.makeText(context, "Shift stats reset", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            // Shift Schedule Toggle Tile
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { showScheduleDialog = true },
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF151821)),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("⏰", fontSize = 18.sp)
+                        Column {
+                            Text("SHIFT SCHEDULE WINDOW", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(
+                                if (scheduleConfig.isEnabled)
+                                    "Active: ${String.format("%02d:00", scheduleConfig.startHour)} to ${String.format("%02d:00", scheduleConfig.endHour)}"
+                                else "Disabled (Manual Master Toggle)",
+                                color = if (scheduleConfig.isEnabled) BrandCyan else TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    Text("Edit ➔", color = BrandCyan, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+
+            // ── 4. ULTRA MODE CARD
             UltraModeCard(
                 isOn = appSettings.ultraModeEnabled,
                 onToggle = { on ->
@@ -194,10 +358,10 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                 }
             )
 
-            // ── 3. MAP ZONE CARD (Blue)
+            // ── 5. MAP ZONE CARD
             MapZoneCard(
                 isOn = appSettings.mapZoneEnabled,
-                hasZone = appSettings.mapZoneLat != 0.0 || appSettings.mapZoneLng != 0.0,
+                hasZone = appSettings.mapZoneLat != 0.0 || appSettings.mapZoneLng != 0.0 || prefsRepo.getMapZones().isNotEmpty(),
                 radiusKm = appSettings.mapZoneRadiusKm,
                 onToggle = { on ->
                     prefsRepo.saveMapZoneEnabled(on)
@@ -206,19 +370,19 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                 onOpenMap = { context.startActivity(Intent(context, MapZoneActivity::class.java)) }
             )
 
-            // ── 4. PLATFORM SELECTOR
+            // ── 6. PLATFORM SELECTOR
             PlatformRow(appSettings.platformPreset) { preset ->
                 prefsRepo.savePlatformPreset(preset)
                 appSettings = prefsRepo.getSettings()
             }
 
-            // ── 5. SPEED SELECTOR
+            // ── 7. SPEED SELECTOR
             SpeedCard(appSettings.clickIntervalMs) { ms ->
                 prefsRepo.saveClickInterval(ms)
                 appSettings = prefsRepo.getSettings()
             }
 
-            // ── 6. SOUND & VIBRATION TOGGLES
+            // ── 8. SOUND & VIBRATION TOGGLES
             FeedbackCard(
                 ttsOn = appSettings.ttsFeedbackEnabled,
                 onTts = { prefsRepo.saveTtsFeedbackEnabled(it); appSettings = prefsRepo.getSettings() },
@@ -226,7 +390,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                 onVibration = { prefsRepo.saveVibrationOnAccept(it); appSettings = prefsRepo.getSettings() }
             )
 
-            // ── 7. RULE & KEYWORD FILTERS (Captain Helper Style)
+            // ── 9. RULE & KEYWORD FILTERS (Captain Helper Style)
             FilterRulesCard(
                 customKeywords = appSettings.customKeywords,
                 negativeKeywords = appSettings.negativeKeywords,
@@ -237,13 +401,60 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                 }
             )
 
-            // ── 8. ACTIVITY AUDIT LOG (Recent Auto-Accept Decisions)
-            ActivityLogCard(context = context)
+            // ── 10. ACTIVITY AUDIT LOG (With Quick-Add & Filter)
+            ActivityLogCard(
+                context = context,
+                onQuickAddKeyword = { kw ->
+                    val current = appSettings.customKeywords
+                    val updated = if (current.isBlank()) kw else "$current, $kw"
+                    prefsRepo.saveCustomKeywords(updated)
+                    appSettings = prefsRepo.getSettings()
+                    Toast.makeText(context, "Added '$kw' to accept keywords!", Toast.LENGTH_SHORT).show()
+                }
+            )
 
-            // ── 9. LAUNCH FLOATING CONTROLS
+            // ── 11. BACKUP & RESTORE
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkCard),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("💾 BACKUP & RESTORE", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                        Text("Export your rules & zones to JSON", color = TextMuted, fontSize = 11.sp)
+                    }
+                    Button(
+                        onClick = {
+                            val json = BackupRestoreManager.exportBackupJson(prefsRepo)
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, json)
+                                type = "application/json"
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Export Taptix Backup"))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkControl),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Export", color = BrandCyan, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            }
+
+            // ── 12. LAUNCH FLOATING CONTROLS
             Button(
                 onClick = {
-                    if (!isAccessibilityOn || !isOverlayOn) return@Button
+                    if (!isAccessibilityOn || !isOverlayOn) {
+                        Toast.makeText(context, "Please grant required permissions first", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
                     val i = Intent(context, OverlayService::class.java)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                         context.startForegroundService(i) else context.startService(i)
@@ -265,9 +476,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("🚀", fontSize = 20.sp)
                         Spacer(Modifier.width(8.dp))
-                        Text("LAUNCH FLOATING CONTROLS",
-                            color = Color.White, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp, letterSpacing = 1.sp)
+                        Text("LAUNCH FLOATING CONTROLS", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, letterSpacing = 1.sp)
                     }
                 }
             }
@@ -289,21 +498,21 @@ fun MasterControlCard(
     onToggle: (Boolean) -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 1f, targetValue = if (isOn) 1.04f else 1f,
-        animationSpec = infiniteRepeatable(tween(800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "masterPulse"
-    )
-    val cardColor by animateColorAsState(
-        targetValue = if (isOn) Color(0xFF1565C0) else Color(0xFF12141C),
-        animationSpec = tween(300), label = "masterCard"
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.98f, targetValue = 1.02f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
     )
 
     Card(
-        modifier = Modifier.fillMaxWidth().scale(pulse),
+        modifier = Modifier.fillMaxWidth().scale(if (isOn) pulseScale else 1f),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isOn) 8.dp else 2.dp)
+        colors = CardDefaults.cardColors(containerColor = if (isOn) Color(0xFF0D2818) else DarkCard),
+        border = if (isOn) androidx.compose.foundation.BorderStroke(2.dp, BrandGreen)
+        else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
     ) {
         Row(
             Modifier.fillMaxWidth().padding(20.dp),
@@ -311,12 +520,22 @@ fun MasterControlCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text("MASTER CONTROL", fontWeight = FontWeight.ExtraBold,
-                    color = Color.White, fontSize = 18.sp, letterSpacing = 1.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(10.dp).clip(CircleShape)
+                            .background(if (isOn) BrandGreen else Color(0xFF555566))
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (isOn) "MASTER CONTROL: ACTIVE" else "MASTER CONTROL: OFF",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isOn) BrandGreen else Color.White,
+                        fontSize = 16.sp, letterSpacing = 1.sp
+                    )
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (!hasPermissions) "⚠️ Enable permissions first"
-                    else if (isOn) "✅ Auto-accept is ACTIVE"
+                    if (isOn) "⚡ Auto-accepting matching requests!"
                     else "Main switch for auto-clicker protocol",
                     color = if (isOn) BrandGreen else Color.White.copy(alpha = 0.7f),
                     fontSize = 13.sp
@@ -342,11 +561,9 @@ fun UltraModeCard(isOn: Boolean, onToggle: (Boolean) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isOn) Color(0xFF1A1030) else Color(0xFF0F1018)
-        ),
+        colors = CardDefaults.cardColors(containerColor = if (isOn) Color(0xFF1A1030) else Color(0xFF0F1018)),
         border = if (isOn) androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF7C4DFF))
-                 else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
+        else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
     ) {
         Row(
             Modifier.fillMaxWidth().padding(20.dp),
@@ -354,11 +571,11 @@ fun UltraModeCard(isOn: Boolean, onToggle: (Boolean) -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("⚡ ULTRA MODE", fontWeight = FontWeight.ExtraBold,
-                        color = if (isOn) Color(0xFFB388FF) else Color.White,
-                        fontSize = 17.sp, letterSpacing = 0.5.sp)
-                }
+                Text(
+                    "⚡ ULTRA MODE", fontWeight = FontWeight.ExtraBold,
+                    color = if (isOn) Color(0xFFB388FF) else Color.White,
+                    fontSize = 17.sp, letterSpacing = 0.5.sp
+                )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     if (isOn) "🔥 Accepting ALL bookings — no filters!"
@@ -392,11 +609,9 @@ fun MapZoneCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isOn) Color(0xFF0D2040) else Color(0xFF111520)
-        ),
-        border = if (isOn) androidx.compose.foundation.BorderStroke(1.5.dp, BrandCyan.copy(alpha = 0.5f))
-                 else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
+        colors = CardDefaults.cardColors(containerColor = if (isOn) Color(0xFF0A1828) else DarkCard),
+        border = if (isOn) androidx.compose.foundation.BorderStroke(1.5.dp, BrandCyan)
+        else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
     ) {
         Row(
             Modifier.fillMaxWidth().padding(20.dp),
@@ -404,20 +619,23 @@ fun MapZoneCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text("🗺️ MAP ZONE", fontWeight = FontWeight.ExtraBold,
-                    color = if (isOn) BrandCyan else Color.White,
-                    fontSize = 17.sp, letterSpacing = 0.5.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "🗺️ MAP WORK ZONES", fontWeight = FontWeight.ExtraBold,
+                        color = if (isOn) BrandCyan else Color.White,
+                        fontSize = 16.sp, letterSpacing = 0.5.sp
+                    )
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (isOn && hasZone) "✅ Active: ${String.format("%.1f", radiusKm)}km circle set"
-                    else if (!hasZone) "Tap 🗺 to draw your target zone on map"
-                    else "Set zone to filter bookings by location",
-                    color = if (isOn) Color(0xFF80D8FF) else Color.White.copy(alpha = 0.6f),
+                    if (!hasZone) "No zones configured — tap map to set"
+                    else if (isOn) "✅ Geofenced auto-accept active"
+                    else "Filter orders to configured circular zones",
+                    color = if (isOn) BrandCyan.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.6f),
                     fontSize = 13.sp
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switch(
                     checked = isOn,
                     onCheckedChange = onToggle,
@@ -484,7 +702,7 @@ fun PlatformRow(selected: PlatformPreset, onSelect: (PlatformPreset) -> Unit) {
     }
 }
 
-// ─── SPEED CARD ───────────────────────────────────────────────────────────────
+// ─── SPEED SELECTOR ───────────────────────────────────────────────────────────
 @Composable
 fun SpeedCard(intervalMs: Long, onSelect: (Long) -> Unit) {
     Column(
@@ -493,30 +711,31 @@ fun SpeedCard(intervalMs: Long, onSelect: (Long) -> Unit) {
             .background(DarkCard)
             .padding(16.dp)
     ) {
-        Text("⚡ DETECTION SPEED", fontWeight = FontWeight.ExtraBold,
+        Text("⚡ CLICK SPEED", fontWeight = FontWeight.ExtraBold,
             color = Color.White, fontSize = 14.sp, letterSpacing = 1.sp)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
-                Triple("🔥 Fast",   150L,  intervalMs <= 200L),
-                Triple("⚡ Normal", 300L,  intervalMs in 201L..400L),
-                Triple("🐢 Slow",   600L,  intervalMs > 400L)
-            ).forEach { (label, ms, sel) ->
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (sel) BrandAmber.copy(alpha = 0.18f) else DarkControl,
-                    modifier = Modifier.weight(1f)
-                        .border(if (sel) 1.5.dp else 0.dp,
-                            if (sel) BrandAmber else Color.Transparent,
-                            RoundedCornerShape(10.dp))
-                        .clickable { onSelect(ms) }
+                100L to "🚀 Fast\n100ms",
+                250L to "⚡ Normal\n250ms",
+                500L to "🛡️ Safe\n500ms"
+            ).forEach { (ms, label) ->
+                val sel = intervalMs == ms
+                Button(
+                    onClick = { onSelect(ms) },
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (sel) BrandCyan else DarkControl
+                    ),
+                    contentPadding = PaddingValues(4.dp)
                 ) {
                     Text(label,
-                        Modifier.padding(vertical = 11.dp).fillMaxWidth(),
-                        textAlign = TextAlign.Center,
-                        fontSize = 13.sp,
-                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                        color = if (sel) BrandAmber else TextMuted)
+                        color = if (sel) Color.Black else TextMuted,
+                        fontWeight = if (sel) FontWeight.ExtraBold else FontWeight.Normal,
+                        fontSize = 12.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 16.sp)
                 }
             }
         }
@@ -539,10 +758,8 @@ fun FeedbackCard(ttsOn: Boolean, onTts: (Boolean) -> Unit, vibrationOn: Boolean,
 
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
             Column {
-                Text("🔊 Voice: \"Ride Accepted by Taptix\"",
-                    color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Text("Plays ONCE after accepting — then silent",
-                    color = TextMuted, fontSize = 11.sp)
+                Text("🔊 Voice Announcement", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Speaks on accept — silent while waiting", color = TextMuted, fontSize = 11.sp)
             }
             Switch(checked = ttsOn, onCheckedChange = onTts,
                 colors = SwitchDefaults.colors(checkedTrackColor = BrandGreen))
@@ -552,30 +769,16 @@ fun FeedbackCard(ttsOn: Boolean, onTts: (Boolean) -> Unit, vibrationOn: Boolean,
 
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
             Column {
-                Text("📳 Vibration on Accept",
-                    color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Text("Single strong vibration pulse",
-                    color = TextMuted, fontSize = 11.sp)
+                Text("📳 Vibration on Accept", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Tactile pulse on confirmed click", color = TextMuted, fontSize = 11.sp)
             }
             Switch(checked = vibrationOn, onCheckedChange = onVibration,
                 colors = SwitchDefaults.colors(checkedTrackColor = BrandGreen))
         }
-
-        HorizontalDivider(color = DarkControl.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 4.dp))
-
-        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-            Column {
-                Text("🤫 Silent when no booking",
-                    color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Text("No sound/vibration while waiting",
-                    color = TextMuted, fontSize = 11.sp)
-            }
-            Text("AUTO", color = BrandCyan, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
-        }
     }
 }
 
-// ─── FILTER RULES CARD (Positive / Negative Keywords) ─────────────────────────
+// ─── FILTER RULES CARD ─────────────────────────────────────────────────────────
 @Composable
 fun FilterRulesCard(
     customKeywords: String,
@@ -646,36 +849,35 @@ fun FilterRulesCard(
             Spacer(Modifier.height(6.dp))
             Button(
                 onClick = {
-                    // Rule 11: Validate empty and duplicate entries
                     val cleanCustom = customText.split(",")
-                        .map { it.trim() }
+                        .map { it.trim().uppercase() }
                         .filter { it.isNotBlank() }
                         .distinct()
                         .joinToString(", ")
+
                     val cleanNegative = negativeText.split(",")
-                        .map { it.trim() }
+                        .map { it.trim().uppercase() }
                         .filter { it.isNotBlank() }
                         .distinct()
                         .joinToString(", ")
-                    customText = cleanCustom
-                    negativeText = cleanNegative
+
                     onSaveKeywords(cleanCustom, cleanNegative)
                     isExpanded = false
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(42.dp),
                 shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
             ) {
-                Text("💾 Save Filter Rules", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Save Keywords", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
-// ─── ACTIVITY AUDIT LOG CARD ──────────────────────────────────────────────────
+// ─── ACTIVITY AUDIT LOG (With Quick-Add Keyword) ──────────────────────────────
 @Composable
-fun ActivityLogCard(context: android.content.Context) {
-    val logManager = remember { com.example.taptix.data.ActivityLogManager.getInstance(context) }
+fun ActivityLogCard(context: Context, onQuickAddKeyword: (String) -> Unit) {
+    val logManager = remember { ActivityLogManager.getInstance(context) }
     var logs by remember { mutableStateOf(logManager.getLogs()) }
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -727,16 +929,15 @@ fun ActivityLogCard(context: android.content.Context) {
                     Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    logs.take(15).forEach { item ->
+                    logs.take(20).forEach { item ->
                         val (statusColor, statusIcon) = when (item.status) {
-                            com.example.taptix.model.LogStatus.ACCEPTED -> BrandGreen to "✅"
-                            com.example.taptix.model.LogStatus.ATTEMPTED -> BrandCyan to "⏳"
-                            com.example.taptix.model.LogStatus.FAILED -> BrandRed to "❌"
-                            com.example.taptix.model.LogStatus.ERROR -> BrandRed to "⚠️"
-                            com.example.taptix.model.LogStatus.REJECTED_KEYWORD -> BrandRed to "⛔"
-                            com.example.taptix.model.LogStatus.OUTSIDE_ZONE -> BrandAmber to "🗺️"
-                            com.example.taptix.model.LogStatus.SYSTEM_EVENT -> BrandCyan to "ℹ️"
-                            else -> BrandCyan to "•"
+                            LogStatus.ACCEPTED -> BrandGreen to "✅"
+                            LogStatus.ATTEMPTED -> BrandCyan to "⏳"
+                            LogStatus.FAILED -> BrandRed to "❌"
+                            LogStatus.ERROR -> BrandRed to "⚠️"
+                            LogStatus.REJECTED_KEYWORD -> BrandRed to "⛔"
+                            LogStatus.OUTSIDE_ZONE -> BrandAmber to "🗺️"
+                            LogStatus.SYSTEM_EVENT -> BrandCyan to "ℹ️"
                         }
 
                         Surface(
@@ -760,46 +961,30 @@ fun ActivityLogCard(context: android.content.Context) {
                                         Text(item.details, color = TextMuted, fontSize = 10.sp)
                                     }
                                 }
-                                Text(
-                                    timeFormat.format(java.util.Date(item.timestamp)),
-                                    color = TextMuted, fontSize = 10.sp
-                                )
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        timeFormat.format(java.util.Date(item.timestamp)),
+                                        color = TextMuted, fontSize = 10.sp
+                                    )
+                                    if (item.status == LogStatus.ACCEPTED || item.status == LogStatus.ATTEMPTED) {
+                                        Text(
+                                            "+ Quick Add",
+                                            color = BrandCyan,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.clickable {
+                                                val kw = item.actionText.substringAfter(":").trim().ifBlank { "ACCEPT" }
+                                                onQuickAddKeyword(kw)
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-}
-
-// ─── PERMISSION WARNING ───────────────────────────────────────────────────────
-@Composable
-fun PermissionWarningBar(
-    accessOk: Boolean, overlayOk: Boolean,
-    onFixA: () -> Unit, onFixO: () -> Unit
-) {
-    Column(
-        Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1A1008))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text("⚠️ SETUP REQUIRED", color = BrandAmber,
-            fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-        if (!accessOk)
-            Button(onClick = onFixA, Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandAmber)) {
-                Text("Enable Accessibility Service", color = Color.Black, fontWeight = FontWeight.Bold)
-            }
-        if (!overlayOk)
-            Button(onClick = onFixO, Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandCyan)) {
-                Text("Allow Display Over Other Apps", color = Color.Black, fontWeight = FontWeight.Bold)
-            }
     }
 }
 
@@ -816,12 +1001,12 @@ fun HowToSetupCard() {
             color = Color.White, fontSize = 14.sp, letterSpacing = 1.sp)
         Spacer(Modifier.height(12.dp))
         listOf(
-            "1️⃣" to "Enable Accessibility Service",
-            "2️⃣" to "Allow Display Over Other Apps",
-            "3️⃣" to "Select your platform (Uber/Ola/Rapido...)",
-            "4️⃣" to "Optional: Draw Map Zone for area filtering",
+            "1️⃣" to "Enable Accessibility Service & Display Over Other Apps",
+            "2️⃣" to "Select your platform (Uber/Ola/Rapido/Porter...)",
+            "3️⃣" to "Optional: Draw Map Zones or Set Active Shift Schedule",
+            "4️⃣" to "Test using the built-in Auto-Accept Simulator",
             "5️⃣" to "Turn ON MASTER CONTROL → starts auto-accept",
-            "6️⃣" to "Open your ride app → bookings accepted automatically! 🚀"
+            "6️⃣" to "Open your driver app → bookings accepted automatically! 🚀"
         ).forEach { (num, text) ->
             Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
                 Text(num, fontSize = 16.sp)

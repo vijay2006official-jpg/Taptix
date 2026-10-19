@@ -8,7 +8,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Manages persistent activity audit logs for captain auto-accept events.
+ * Manages persistent activity audit logs with 7-day auto-expiry,
+ * cap management, and filtering capabilities.
  */
 class ActivityLogManager(context: Context) {
 
@@ -17,18 +18,22 @@ class ActivityLogManager(context: Context) {
 
     @Synchronized
     fun addLog(appName: String, actionText: String, status: LogStatus, details: String = "") {
+        val now = System.currentTimeMillis()
         val currentLogs = getLogs().toMutableList()
         val newItem = ActivityLogItem(
-            id = System.currentTimeMillis(),
-            timestamp = System.currentTimeMillis(),
+            id = now,
+            timestamp = now,
             appName = appName,
             actionText = actionText,
             status = status,
             details = details
         )
         currentLogs.add(0, newItem)
-        // Keep last 50 entries
-        val trimmed = if (currentLogs.size > 50) currentLogs.take(50) else currentLogs
+
+        // Rule 14: Auto-expire old entries (older than 7 days) & maintain cap
+        val sevenDaysAgo = now - SEVEN_DAYS_MS
+        val nonExpired = currentLogs.filter { it.timestamp >= sevenDaysAgo }
+        val trimmed = if (nonExpired.size > MAX_LOG_ENTRIES) nonExpired.take(MAX_LOG_ENTRIES) else nonExpired
         saveLogs(trimmed)
     }
 
@@ -36,14 +41,21 @@ class ActivityLogManager(context: Context) {
     fun getLogs(): List<ActivityLogItem> {
         val jsonStr = prefs.getString(KEY_LOGS, null) ?: return emptyList()
         val list = mutableListOf<ActivityLogItem>()
+        val now = System.currentTimeMillis()
+        val sevenDaysAgo = now - SEVEN_DAYS_MS
+
         try {
             val arr = JSONArray(jsonStr)
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
+                val ts = obj.optLong("timestamp", now)
+                // Filter expired entries on read
+                if (ts < sevenDaysAgo) continue
+
                 list.add(
                     ActivityLogItem(
-                        id = obj.optLong("id", System.currentTimeMillis()),
-                        timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
+                        id = obj.optLong("id", ts),
+                        timestamp = ts,
                         appName = obj.optString("appName", "Unknown"),
                         actionText = obj.optString("actionText", ""),
                         status = try {
@@ -59,6 +71,16 @@ class ActivityLogManager(context: Context) {
             e.printStackTrace()
         }
         return list
+    }
+
+    @Synchronized
+    fun getFilteredLogs(statusFilter: LogStatus? = null, appFilter: String? = null): List<ActivityLogItem> {
+        val all = getLogs()
+        return all.filter { item ->
+            val matchStatus = statusFilter == null || item.status == statusFilter
+            val matchApp = appFilter.isNullOrBlank() || item.appName.contains(appFilter, ignoreCase = true)
+            matchStatus && matchApp
+        }
     }
 
     @Synchronized
@@ -85,6 +107,8 @@ class ActivityLogManager(context: Context) {
     companion object {
         private const val PREFS_NAME = "taptix_activity_logs"
         private const val KEY_LOGS = "logs_json"
+        private const val MAX_LOG_ENTRIES = 150
+        private const val SEVEN_DAYS_MS = 7L * 24 * 60 * 60 * 1000L
 
         @Volatile
         private var INSTANCE: ActivityLogManager? = null
