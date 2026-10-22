@@ -9,10 +9,10 @@ import com.example.taptix.model.PlatformPreset
 data class AppSettings(
     val clickIntervalMs: Long = 300L,
     val operatingMode: OperatingMode = OperatingMode.SMART_ACCEPT,
-    val platformPreset: PlatformPreset = PlatformPreset.UNIVERSAL,
+    val platformPreset: PlatformPreset = PlatformPreset.UBER,
     val customKeywords: String = "ACCEPT, CONFIRM, RIDE",
     val autoPauseOnAccept: Boolean = true,
-    val motionSafetyLockEnabled: Boolean = false,
+    val motionSafetyLockEnabled: Boolean = true,
     val ttsFeedbackEnabled: Boolean = true,
     val swipeDurationMs: Long = 350L,
     val autoLaunchForTargetAppsEnabled: Boolean = true,
@@ -26,13 +26,13 @@ data class AppSettings(
     val autoPauseOnKeyboard: Boolean = false,
 
     // New v1.7 Settings
-    val masterControlEnabled: Boolean = false,   // Main ON/OFF master switch
-    val ultraModeEnabled: Boolean = false,        // Accept ALL bookings, bypass filters
-    val mapZoneEnabled: Boolean = false,          // Only accept bookings in drawn map zone
-    val mapZoneLat: Double = 0.0,                 // Center latitude of zone circle
-    val mapZoneLng: Double = 0.0,                 // Center longitude of zone circle
-    val mapZoneRadiusKm: Double = 2.0,            // Radius in kilometers
-    val vibrationOnAccept: Boolean = true,        // Vibrate on accept (can be toggled OFF)
-    val negativeKeywords: String = "CASH, LOW RATING, SHARED", // Exclude orders containing these terms
-    val preferredAreas: String = ""              // Comma-separated preferred area names
+    val masterControlEnabled: Boolean = false,
+    val ultraModeEnabled: Boolean = false,
+    val mapZoneEnabled: Boolean = false,
+    val mapZoneLat: Double = 0.0,
+    val mapZoneLng: Double = 0.0,
+    val mapZoneRadiusKm: Double = 2.0,
+    val vibrationOnAccept: Boolean = true,
+    val negativeKeywords: String = "CASH, LOW RATING, SHARED",
+    val preferredAreas: String = ""
 )

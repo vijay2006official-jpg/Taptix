@@ -1,64 +1,69 @@
-package com.example.taptix
+package com.example.taptix.data
 
-import com.example.taptix.data.AppSettings
-import com.example.taptix.model.OperatingMode
-import com.example.taptix.model.PlatformPreset
-import com.example.taptix.model.TargetPoint
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import android.content.Context
+import android.content.SharedPreferences
+import com.example.taptix.model.DriverProfile
+import com.example.taptix.model.ZoneProfile
+import org.json.JSONArray
 
-class TaptixUnitTest {
+class ProfileManager(context: Context) {
 
-    @Test
-    fun testPlatformPreset_uberProperties() {
-        val uber = PlatformPreset.UBER
-        assertEquals("Uber Driver", uber.title)
-        assertTrue(uber.keywords.contains("ACCEPT"))
+    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun getProfiles(): List<DriverProfile> {
+        val json = prefs.getString(KEY_PROFILES, null) ?: return defaultProfiles()
+        return DriverProfile.fromJson(json).ifEmpty { defaultProfiles() }
     }
 
-    @Test
-    fun testPlatformPreset_fromId() {
-        val presetOla = PlatformPreset.fromId("ola")
-        assertEquals(PlatformPreset.OLA, presetOla)
-
-        val presetRapido = PlatformPreset.fromId("rapido")
-        assertEquals(PlatformPreset.RAPIDO, presetRapido)
-
-        val presetUnknown = PlatformPreset.fromId("nonexistent")
-        assertEquals(PlatformPreset.UNIVERSAL, presetUnknown)
+    fun saveProfiles(profiles: List<DriverProfile>) {
+        val arr = JSONArray()
+        profiles.forEach { arr.put(it.toJsonObject()) }
+        prefs.edit().putString(KEY_PROFILES, arr.toString()).apply()
     }
 
-    @Test
-    fun testOperatingMode_values() {
-        val modes = OperatingMode.entries
-        assertEquals(3, modes.size)
-        assertTrue(modes.contains(OperatingMode.SINGLE_TARGET))
-        assertTrue(modes.contains(OperatingMode.MULTI_TARGET))
-        assertTrue(modes.contains(OperatingMode.SMART_ACCEPT))
+    fun setActiveProfile(profileId: String) {
+        prefs.edit().putString(KEY_ACTIVE_PROFILE, profileId).apply()
     }
 
-    @Test
-    fun testTargetPoint_coordinates() {
-        val point = TargetPoint(id = 1, x = 300, y = 600)
-        assertEquals(1, point.id)
-        assertEquals(300, point.x)
-        assertEquals(600, point.y)
+    fun getActiveProfileId(): String = prefs.getString(KEY_ACTIVE_PROFILE, "default") ?: "default"
 
-        point.x = 450
-        point.y = 850
-        assertEquals(450, point.x)
-        assertEquals(850, point.y)
+    fun getActiveProfile(): DriverProfile {
+        val id = getActiveProfileId()
+        return getProfiles().firstOrNull { it.id == id } ?: getProfiles().firstOrNull() ?: defaultProfiles().first()
     }
 
-    @Test
-    fun testAppSettings_defaultValues() {
-        val settings = AppSettings()
-        assertEquals(300L, settings.clickIntervalMs)
-        assertEquals(OperatingMode.SMART_ACCEPT, settings.operatingMode)
-        assertEquals(PlatformPreset.UBER, settings.platformPreset)
-        assertTrue(settings.autoPauseOnAccept)
-        assertTrue(settings.motionSafetyLockEnabled)
-        assertTrue(settings.ttsFeedbackEnabled)
+    fun getZoneProfiles(): List<ZoneProfile> {
+        val json = prefs.getString(KEY_ZONES, null) ?: return emptyList()
+        return ZoneProfile.fromJson(json)
+    }
+
+    fun saveZoneProfiles(profiles: List<ZoneProfile>) {
+        val arr = JSONArray()
+        profiles.forEach { arr.put(it.toJsonObject()) }
+        prefs.edit().putString(KEY_ZONES, arr.toString()).apply()
+    }
+
+    fun defaultProfiles(): List<DriverProfile> = listOf(
+        DriverProfile(
+            id = "default",
+            name = "Default",
+            platformPreset = com.example.taptix.model.PlatformPreset.UBER,
+            customKeywords = "ACCEPT, CONFIRM, RIDE",
+            negativeKeywords = "CASH, LOW RATING, SHARED",
+            targetAppPackages = "com.ubercab.driver, com.olacabs.driver, com.rapido.captain, com.indriver",
+            ultraModeEnabled = false,
+            mapZoneEnabled = false,
+            mapZoneLat = 0.0,
+            mapZoneLng = 0.0,
+            mapZoneRadiusKm = 2.0
+        )
+    )
+
+    companion object {
+        private const val PREFS_NAME = "taptix_profiles"
+        private const val KEY_PROFILES = "profiles_json"
+        private const val KEY_ZONES = "zones_json"
+        private const val KEY_ACTIVE_PROFILE = "active_profile_id"
     }
 }
+
