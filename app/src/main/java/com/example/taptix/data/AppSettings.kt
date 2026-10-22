@@ -1,5 +1,9 @@
 package com.example.taptix.data
 
+import com.example.taptix.model.OperatingMode
+import com.example.taptix.model.PlatformPreset
+
+// Phase 2 profile-aware settings
 data class AppSettings(
     val clickIntervalMs: Long = 300L,
     val operatingMode: OperatingMode = OperatingMode.SMART_ACCEPT,
@@ -26,5 +30,8 @@ data class AppSettings(
     val mapZoneRadiusKm: Double = 2.0,
     val vibrationOnAccept: Boolean = true,
     val negativeKeywords: String = "CASH, LOW RATING, SHARED",
-    val preferredAreas: String = ""
+    val preferredAreas: String = "",
+    val activeProfileId: String = "default",
+    val profileNames: String = "default",
+    val zoneProfilesJson: String = "[]"
 )
