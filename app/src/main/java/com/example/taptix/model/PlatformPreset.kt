@@ -14,13 +14,11 @@ enum class PlatformPreset(
         id = "universal",
         title = "Universal (All Duties)",
         keywords = listOf(
-            // Ride & Order Accept
             "ACCEPT", "TAP TO ACCEPT", "ACCEPT TRIP", "ACCEPT RIDE", "ACCEPT ORDER",
             "ACCEPT BOOKING", "ACCEPT DUTY", "CONFIRM", "CONFIRM RIDE", "SWIPE TO ACCEPT",
             "MATCH", "BOOKING", "RIDE REQUEST", "NEW RIDE", "CAPTAIN ACCEPT",
-            "GO TO PICKUP", "TAKE RIDE", "OFFER", "GO", "START DUTY", "TAKE DUTY",
-            // Rentals, Outstation & Delivery Duties
-            "ACCEPT DUTY", "NEW DUTY", "OUTSTATION", "RENTAL", "HOURLY", "PACKAGE", "PARCEL",
+            "GO TO PICKUP", "TAKE RIDE", "OFFER", "START DUTY", "TAKE DUTY",
+            "NEW DUTY", "OUTSTATION", "RENTAL", "HOURLY", "PACKAGE", "PARCEL",
             "DELIVERY", "ACCEPT DELIVERY", "ACCEPT PARCEL", "ORDER REQUEST"
         ),
         requiresSwipe = false
@@ -30,7 +28,7 @@ enum class PlatformPreset(
         title = "Uber Driver",
         keywords = listOf(
             "ACCEPT", "TAP TO ACCEPT", "RIDE REQUEST", "ACCEPT TRIP", "MATCH", "ACCEPT OFFER",
-            "GO", "UBER GO", "UBER AUTO", "UBER MOTO", "PACKAGE", "CONNECT", "RESERVE",
+            "UBER GO", "UBER AUTO", "UBER MOTO", "PACKAGE", "CONNECT", "RESERVE",
             "ACCEPT DELIVERY", "DELIVERY REQUEST"
         ),
         requiresSwipe = false
@@ -76,7 +74,7 @@ enum class PlatformPreset(
     CUSTOM(
         id = "custom",
         title = "Custom App",
-        keywords = listOf("ACCEPT", "CONFIRM", "YES", "OK", "TAKE", "GO"),
+        keywords = listOf("ACCEPT", "CONFIRM"),
         requiresSwipe = false
     );
 

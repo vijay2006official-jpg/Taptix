@@ -7,9 +7,6 @@ import com.example.taptix.model.LogStatus
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Manages persistent activity audit logs for captain auto-accept events.
- */
 class ActivityLogManager(context: Context) {
 
     private val prefs: SharedPreferences =
@@ -27,8 +24,7 @@ class ActivityLogManager(context: Context) {
             details = details
         )
         currentLogs.add(0, newItem)
-        // Keep last 50 entries
-        val trimmed = if (currentLogs.size > 50) currentLogs.take(50) else currentLogs
+        val trimmed = if (currentLogs.size > MAX_LOGS) currentLogs.take(MAX_LOGS) else currentLogs
         saveLogs(trimmed)
     }
 
@@ -85,6 +81,7 @@ class ActivityLogManager(context: Context) {
     companion object {
         private const val PREFS_NAME = "taptix_activity_logs"
         private const val KEY_LOGS = "logs_json"
+        private const val MAX_LOGS = 500
 
         @Volatile
         private var INSTANCE: ActivityLogManager? = null

@@ -1,11 +1,5 @@
 package com.example.taptix.data
 
-import com.example.taptix.model.OperatingMode
-import com.example.taptix.model.PlatformPreset
-
-/**
- * Data class representing driver settings for Taptix.
- */
 data class AppSettings(
     val clickIntervalMs: Long = 300L,
     val operatingMode: OperatingMode = OperatingMode.SMART_ACCEPT,
@@ -16,7 +10,7 @@ data class AppSettings(
     val ttsFeedbackEnabled: Boolean = true,
     val swipeDurationMs: Long = 350L,
     val autoLaunchForTargetAppsEnabled: Boolean = true,
-    val targetAppPackages: String = "com.ubercab.driver, me.lyft.driver, com.indriver, com.olacabs.driver, com.rapido.passenger, com.grabtaxi.driver2, com.dd.driver",
+    val targetAppPackages: String = "com.ubercab.driver, com.olacabs.driver, com.olacabs.partner, com.rapido.captain, com.rapido.passenger, com.indriver, sinet.startup.inDriver, in.juspay.nammayatripartner, com.theporter.android, com.uber.partner, com.uber.driver",
     val autoHideOnExit: Boolean = false,
     val voiceCommandsEnabled: Boolean = true,
     val nightModeAutoDimEnabled: Boolean = true,
@@ -24,15 +18,13 @@ data class AppSettings(
     val autoDimDelaySeconds: Int = 8,
     val pixelShiftBurnInProtection: Boolean = true,
     val autoPauseOnKeyboard: Boolean = false,
-
-    // New v1.7 Settings
-    val masterControlEnabled: Boolean = false,   // Main ON/OFF master switch
-    val ultraModeEnabled: Boolean = false,        // Accept ALL bookings, bypass filters
-    val mapZoneEnabled: Boolean = false,          // Only accept bookings in drawn map zone
-    val mapZoneLat: Double = 0.0,                 // Center latitude of zone circle
-    val mapZoneLng: Double = 0.0,                 // Center longitude of zone circle
-    val mapZoneRadiusKm: Double = 2.0,            // Radius in kilometers
-    val vibrationOnAccept: Boolean = true,        // Vibrate on accept (can be toggled OFF)
-    val negativeKeywords: String = "CASH, LOW RATING, SHARED", // Exclude orders containing these terms
-    val preferredAreas: String = ""              // Comma-separated preferred area names
+    val masterControlEnabled: Boolean = false,
+    val ultraModeEnabled: Boolean = false,
+    val mapZoneEnabled: Boolean = false,
+    val mapZoneLat: Double = 0.0,
+    val mapZoneLng: Double = 0.0,
+    val mapZoneRadiusKm: Double = 2.0,
+    val vibrationOnAccept: Boolean = true,
+    val negativeKeywords: String = "CASH, LOW RATING, SHARED",
+    val preferredAreas: String = ""
 )

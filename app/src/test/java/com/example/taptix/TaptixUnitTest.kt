@@ -56,9 +56,10 @@ class TaptixUnitTest {
         val settings = AppSettings()
         assertEquals(300L, settings.clickIntervalMs)
         assertEquals(OperatingMode.SMART_ACCEPT, settings.operatingMode)
-        assertEquals(PlatformPreset.UBER, settings.platformPreset)
+        assertEquals(PlatformPreset.UNIVERSAL, settings.platformPreset)
         assertTrue(settings.autoPauseOnAccept)
-        assertTrue(settings.motionSafetyLockEnabled)
         assertTrue(settings.ttsFeedbackEnabled)
+        assertTrue(settings.masterControlEnabled == false)
+        assertTrue(settings.motionSafetyLockEnabled == false)
     }
 }

@@ -15,9 +15,6 @@ import com.example.taptix.data.PreferencesRepository
 import com.example.taptix.service.AutoClickService
 import com.example.taptix.service.OverlayService
 
-/**
- * 1-Tap Home Screen Widget to toggle Taptix Master Auto-Accept without opening the app.
- */
 class TaptixWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -28,34 +25,35 @@ class TaptixWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TOGGLE_MASTER) {
-            val prefs = PreferencesRepository(context)
-            val currentSettings = prefs.getSettings()
-            val newState = !currentSettings.masterControlEnabled
+        if (intent.action != ACTION_TOGGLE_MASTER) return
 
-            prefs.saveMasterControl(newState)
-
-            if (newState) {
-                if (android.provider.Settings.canDrawOverlays(context)) {
-                    val overlayIntent = Intent(context, OverlayService::class.java)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(overlayIntent)
-                    } else {
-                        context.startService(overlayIntent)
-                    }
-                }
-                AutoClickService.instance?.setClickingActive(true)
-            } else {
-                AutoClickService.instance?.setClickingActive(false)
-            }
-
-            // Update all widgets
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(ComponentName(context, TaptixWidgetProvider::class.java))
-            for (id in ids) {
-                updateAppWidget(context, manager, id)
-            }
+        val senderPackage = intent.getPackage()
+        if (senderPackage != null && senderPackage != context.packageName) {
+            return
         }
+
+        val prefs = PreferencesRepository(context)
+        val currentSettings = prefs.getSettings()
+        val newState = !currentSettings.masterControlEnabled
+        prefs.saveMasterControl(newState)
+
+        if (newState) {
+            if (android.provider.Settings.canDrawOverlays(context)) {
+                val overlayIntent = Intent(context, OverlayService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(overlayIntent)
+                } else {
+                    context.startService(overlayIntent)
+                }
+            }
+            AutoClickService.instance?.setClickingActive(true)
+        } else {
+            AutoClickService.instance?.setClickingActive(false)
+        }
+
+        val manager = AppWidgetManager.getInstance(context)
+        val ids = manager.getAppWidgetIds(ComponentName(context, TaptixWidgetProvider::class.java))
+        ids.forEach { id -> updateAppWidget(context, manager, id) }
     }
 
     companion object {
@@ -65,10 +63,8 @@ class TaptixWidgetProvider : AppWidgetProvider() {
             val prefs = PreferencesRepository(context)
             val settings = prefs.getSettings()
             val isActive = settings.masterControlEnabled
-
             val views = RemoteViews(context.packageName, R.layout.taptix_widget_layout)
 
-            // Open app on root click
             val openAppIntent = Intent(context, MainActivity::class.java)
             val openAppPending = PendingIntent.getActivity(
                 context, 0, openAppIntent,
@@ -76,10 +72,7 @@ class TaptixWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_root, openAppPending)
 
-            // Toggle on button click
-            val toggleIntent = Intent(context, TaptixWidgetProvider::class.java).apply {
-                action = ACTION_TOGGLE_MASTER
-            }
+            val toggleIntent = Intent(context, TaptixWidgetProvider::class.java).apply { action = ACTION_TOGGLE_MASTER }
             val togglePending = PendingIntent.getBroadcast(
                 context, appWidgetId, toggleIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
