@@ -483,7 +483,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
                                 Text("TAPTIX", fontWeight = FontWeight.Black, fontSize = 20.sp, color = Color.White, letterSpacing = 2.sp)
 
-                                Text("Autonomous Captain Engine v2.0", fontSize = 10.sp, color = TextMuted)
+                                Text("Autonomous Captain Engine v2.1", fontSize = 10.sp, color = BrandCyan)
 
                             }
 
