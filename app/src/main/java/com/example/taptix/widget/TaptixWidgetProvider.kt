@@ -1,4 +1,4 @@
-﻿package com.example.taptix.widget
+package com.example.taptix.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -56,7 +56,7 @@ class TaptixWidgetProvider : AppWidgetProvider() {
                 }
                 AutoClickService.instance?.setClickingActive(true)
             } else {
-                AutoClickService.instance?.setClickingActive(false)
+                context.stopService(Intent(context, OverlayService::class.java)); AutoClickService.instance?.setClickingActive(false)
             }
 
             notifyStateChanged(context)

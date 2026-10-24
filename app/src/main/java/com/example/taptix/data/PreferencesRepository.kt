@@ -1,4 +1,4 @@
-﻿package com.example.taptix.data
+package com.example.taptix.data
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -36,7 +36,7 @@ class PreferencesRepository(context: Context) {
         val autoHide = prefs.getBoolean(KEY_AUTO_HIDE, false)
         val voiceCommands = prefs.getBoolean(KEY_VOICE_COMMANDS, true)
 
-        val nightModeDim = prefs.getBoolean(KEY_NIGHT_MODE_AUTO_DIM, true)
+        val nightModeDim = prefs.getBoolean(KEY_NIGHT_MODE_AUTO_DIM, false)
         val dimIntensity = prefs.getFloat(KEY_NIGHT_MODE_DIM_INTENSITY, 0.35f)
         val dimDelay = prefs.getInt(KEY_AUTO_DIM_DELAY, 8)
         val pixelShift = prefs.getBoolean(KEY_PIXEL_SHIFT, true)

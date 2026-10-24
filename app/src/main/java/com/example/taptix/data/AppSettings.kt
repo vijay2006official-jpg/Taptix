@@ -19,7 +19,7 @@ data class AppSettings(
     val targetAppPackages: String = "com.ubercab.driver, me.lyft.driver, com.indriver, com.olacabs.driver, com.rapido.passenger, com.grabtaxi.driver2, com.dd.driver",
     val autoHideOnExit: Boolean = false,
     val voiceCommandsEnabled: Boolean = true,
-    val nightModeAutoDimEnabled: Boolean = true,
+    val nightModeAutoDimEnabled: Boolean = false,
     val nightModeDimIntensity: Float = 0.35f,
     val autoDimDelaySeconds: Int = 8,
     val pixelShiftBurnInProtection: Boolean = true,

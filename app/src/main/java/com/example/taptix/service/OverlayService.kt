@@ -69,6 +69,11 @@ class OverlayService : Service() {
     private val autoDimRunnable = Runnable { applyNightModeDimming() }
     private val pixelShiftRunnable = Runnable { executePixelShift() }
 
+    // Floating Bubble & Minimized state
+    private var bubbleView: View? = null
+    private var bubbleParams: WindowManager.LayoutParams? = null
+    private var isMinimized = false
+
     // UI View References
     private var playPauseBtn: Button? = null
     private var modeBtn: Button? = null
@@ -76,7 +81,7 @@ class OverlayService : Service() {
     private var micBtn: Button? = null
     private var statusTv: TextView? = null
     private var dimToggleBtn: Button? = null
-    private var gestureToggleBtn: Button? = null  // Floating gesture enable/disable toggle
+    private var gestureToggleBtn: Button? = null
 
     // Trip Widget UI Views
     private var tripBadgeTv: TextView? = null
@@ -106,8 +111,10 @@ class OverlayService : Service() {
             motionDetector?.start()
         }
 
-        // Initialize default target point
-        addTargetMarker(x = 500, y = 800)
+        // Initialize default target point ONLY for manual tap modes (Single Target, Multi Target)
+        if (settings.operatingMode != OperatingMode.SMART_ACCEPT) {
+            addTargetMarker(x = 500, y = 800)
+        }
 
         // Start Auto-Dim Idle Timer if enabled
         resetAutoDimTimer()
@@ -178,6 +185,10 @@ class OverlayService : Service() {
         voiceManager?.shutdown()
         removeFloatingToolbar()
         removeAllTargetMarkers()
+        bubbleView?.let {
+            try { windowManager.removeView(it) } catch (_: Exception) {}
+            bubbleView = null
+        }
         ttsManager?.shutdown()
         instance = null
         Log.d(TAG, "OverlayService destroyed")
@@ -219,7 +230,7 @@ class OverlayService : Service() {
 
     // --- Floating Control & Trip Overlay UI Setup ---
 
-    @SuppressLint("ClickableViewAccessibility")
+        @SuppressLint("ClickableViewAccessibility")
     private fun setupFloatingToolbar() {
         val layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -232,52 +243,97 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 40
-            y = 180
+            x = 30
+            y = 120
             alpha = 1.0f
         }
 
         toolbarParams = layoutParams
 
+        // Main Container: Compact, Solid Dark Slate with Cyan Accent Border
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(20, 16, 20, 16)
             elevation = 16f
-            background = createRoundBackground("#1E1E2C", 28f)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.parseColor("#151821"))
+                cornerRadius = 24f
+                setStroke(3, Color.parseColor("#00E5FF"))
+            }
         }
         toolbarContainer = container
 
-        // Drag Handle / Header
+        // --- ROW 1: Header / Drag Handle / Quick Actions ---
         val headerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, 8)
+            setPadding(4, 0, 4, 10)
         }
 
-        val headerTv = TextView(this).apply {
-            text = "::: TAPTIX TRIP OVERLAY :::"
-            setTextColor(Color.parseColor("#A0A0B0"))
-            textSize = 10f
-            gravity = Gravity.START
+        val logoTv = TextView(this).apply {
+            text = "⚡ TAPTIX"
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER_VERTICAL
         }
-        headerRow.addView(headerTv, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        headerRow.addView(logoTv, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        // Dim Status Badge Button
-        dimToggleBtn = Button(this).apply {
-            text = "☀️ NORMAL"
+        // Operating Mode Pill Button
+        modeBtn = Button(this).apply {
+            text = prefsRepo.getSettings().operatingMode.name.substring(0, 5)
             textSize = 9f
-            setTextColor(Color.YELLOW)
-            background = createRoundBackground("#2A2A3C", 12f)
+            setTextColor(Color.WHITE)
+            background = createRoundBackground("#252A38", 12f)
             setOnClickListener {
                 wakeUpFromDimming()
-                if (isDimmed) wakeUpFromDimming() else applyNightModeDimming()
+                cycleOperatingMode()
             }
         }
-        headerRow.addView(dimToggleBtn, LinearLayout.LayoutParams(180, 75))
+        headerRow.addView(modeBtn, LinearLayout.LayoutParams(130, 72).apply { rightMargin = 8 })
 
-        container.addView(headerRow)
+        // Platform Preset Pill Button
+        presetBtn = Button(this).apply {
+            text = prefsRepo.getSettings().platformPreset.title.split(" ").first()
+            textSize = 9f
+            setTextColor(Color.WHITE)
+            background = createRoundBackground("#0288D1", 12f)
+            setOnClickListener {
+                wakeUpFromDimming()
+                cyclePreset()
+            }
+        }
+        headerRow.addView(presetBtn, LinearLayout.LayoutParams(130, 72).apply { rightMargin = 8 })
 
-        // Touch Listener for dragging toolbar & waking from dimming
+        // Minimize Button (—)
+        val minBtn = Button(this).apply {
+            text = "—"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = createRoundBackground("#374151", 12f)
+            setOnClickListener {
+                wakeUpFromDimming()
+                minimizeToBubble()
+            }
+        }
+        headerRow.addView(minBtn, LinearLayout.LayoutParams(70, 72).apply { rightMargin = 8 })
+
+        // Close Button (✕) - Stops overlay & switches Master OFF
+        val closeBtn = Button(this).apply {
+            text = "✕"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = createRoundBackground("#C62828", 12f)
+            setOnClickListener {
+                closeOverlayCompletely()
+            }
+        }
+        headerRow.addView(closeBtn, LinearLayout.LayoutParams(70, 72))
+
+        // Touch Listener for dragging toolbar
         headerRow.setOnTouchListener(object : View.OnTouchListener {
             private var initialX = 0
             private var initialY = 0
@@ -306,16 +362,88 @@ class OverlayService : Service() {
                 return false
             }
         })
+        container.addView(headerRow)
 
-        // --- Real-Time Trip Status Widget Component ---
+        // --- ROW 2: Primary Control Buttons ---
+        val buttonRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, 6)
+        }
+
+        // Play / Pause Button
+        playPauseBtn = Button(this).apply {
+            text = if (isPlaying) "⏸ PAUSE" else "▶ START"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = createRoundBackground(if (isPlaying) "#E65100" else "#2E7D32", 14f)
+            setOnClickListener {
+                wakeUpFromDimming()
+                togglePlayPause()
+            }
+        }
+        buttonRow.addView(playPauseBtn, LinearLayout.LayoutParams(160, 85).apply { rightMargin = 10 })
+
+        // Gesture Automation Master Toggle
+        val gestureActive = prefsRepo.getSettings().masterControlEnabled
+        gestureToggleBtn = Button(this).apply {
+            text = if (gestureActive) "⚡ AUTO ON" else "⏸ AUTO OFF"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = createRoundBackground(if (gestureActive) "#1B5E20" else "#4A148C", 14f)
+            setOnClickListener {
+                wakeUpFromDimming()
+                toggleGestureAutomation()
+            }
+        }
+        buttonRow.addView(gestureToggleBtn, LinearLayout.LayoutParams(180, 85).apply { rightMargin = 10 })
+
+        // Voice Mic Button
+        micBtn = Button(this).apply {
+            text = "🎤 MIC"
+            textSize = 10f
+            setTextColor(Color.WHITE)
+            background = createRoundBackground("#37474F", 14f)
+            setOnClickListener {
+                wakeUpFromDimming()
+                if (voiceManager?.isListening() == true) {
+                    voiceManager?.stopListening()
+                    text = "🎤 MIC"
+                    background = createRoundBackground("#37474F", 14f)
+                } else {
+                    voiceManager?.startListening()
+                    text = "🔴 REC"
+                    background = createRoundBackground("#D84315", 14f)
+                }
+            }
+        }
+        buttonRow.addView(micBtn, LinearLayout.LayoutParams(120, 85))
+
+        container.addView(buttonRow)
+
+        // --- ROW 3: Status Indicator Pill ---
+        statusTv = TextView(this).apply {
+            val isAuto = prefsRepo.getSettings().masterControlEnabled
+            text = if (isAuto) "🟢 AUTO-ACCEPT: ACTIVE" else "⚪ AUTO-ACCEPT: OFF"
+            setTextColor(if (isAuto) Color.parseColor("#00E676") else Color.parseColor("#8892A4"))
+            textSize = 10f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setPadding(0, 4, 0, 2)
+        }
+        container.addView(statusTv)
+
+        // --- TRIP STATUS CARD: Hidden by default! Only shows when real offer arrives ---
         val tripCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(16, 12, 16, 12)
-            background = createRoundBackground("#12121A", 20f)
+            setPadding(14, 10, 14, 10)
+            background = createRoundBackground("#0D1017", 16f)
+            visibility = View.GONE  // Clean: No fake orders blocking the screen!
         }
         tripCardContainer = tripCard
 
-        // Trip Phase Badge Row + Expand/Collapse Button
         val tripHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -324,9 +452,9 @@ class OverlayService : Service() {
         tripBadgeTv = TextView(this).apply {
             text = currentTripInfo.phase.label
             setTextColor(Color.WHITE)
-            textSize = 11f
-            setPadding(16, 6, 16, 6)
-            background = createRoundBackground(currentTripInfo.phase.badgeColorHex, 14f)
+            textSize = 10f
+            setPadding(12, 4, 12, 4)
+            background = createRoundBackground(currentTripInfo.phase.badgeColorHex, 10f)
         }
         tripHeaderRow.addView(tripBadgeTv)
 
@@ -334,200 +462,161 @@ class OverlayService : Service() {
         tripHeaderRow.addView(spacer, LinearLayout.LayoutParams(20, 1, 1f))
 
         tripExpandBtn = Button(this).apply {
-            text = if (isTripWidgetExpanded) "▲ MIN" else "▼ EXPAND"
+            text = "✕ HIDE"
             textSize = 9f
-            setTextColor(Color.CYAN)
-            background = createRoundBackground("#252538", 12f)
+            setTextColor(Color.GRAY)
+            background = createRoundBackground("#202430", 10f)
             setOnClickListener {
-                wakeUpFromDimming()
-                toggleTripWidgetExpand()
+                tripCard.visibility = View.GONE
             }
         }
-        tripHeaderRow.addView(tripExpandBtn, LinearLayout.LayoutParams(160, 75))
-
+        tripHeaderRow.addView(tripExpandBtn, LinearLayout.LayoutParams(120, 65))
         tripCard.addView(tripHeaderRow)
 
-        // Trip Details (Fare, Distance, ETA, Passenger)
         tripDetailsTv = TextView(this).apply {
-            text = "${currentTripInfo.fare}  •  ${currentTripInfo.distance}  •  ${currentTripInfo.etaMinutes} min ETA  •  ${currentTripInfo.passengerRating}"
+            text = "${currentTripInfo.fare} • ${currentTripInfo.distance} • ${currentTripInfo.etaMinutes} min"
             setTextColor(Color.parseColor("#4DEAEA"))
-            textSize = 13f
-            setPadding(0, 8, 0, 4)
+            textSize = 12f
+            setPadding(0, 6, 0, 2)
         }
         tripCard.addView(tripDetailsTv)
 
-        // Pickup / Dropoff Addresses
         tripAddressesTv = TextView(this).apply {
-            text = "📍 Pick: ${currentTripInfo.pickupAddress}\n🏁 Drop: ${currentTripInfo.dropoffAddress}"
+            text = "📍 ${currentTripInfo.pickupAddress}"
             setTextColor(Color.parseColor("#BBBBCC"))
             textSize = 10f
-            setPadding(0, 0, 0, 8)
+            setPadding(0, 0, 0, 4)
         }
         tripCard.addView(tripAddressesTv)
 
-        // Quick Trip Action Row
         val tripActionRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
         tripActionBtn = Button(this).apply {
-            text = "⚡ ACCEPT OFFER (${currentTripInfo.fare})"
+            text = "⚡ ACCEPT OFFER"
             textSize = 11f
             setTextColor(Color.BLACK)
-            background = createRoundBackground("#FFB300", 14f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = createRoundBackground("#FFB300", 12f)
             setOnClickListener {
                 wakeUpFromDimming()
                 handleTripActionClicked()
             }
         }
-        tripActionRow.addView(tripActionBtn, LinearLayout.LayoutParams(0, 95, 1f))
-
-        val phaseCycleBtn = Button(this).apply {
-            text = "NEXT ➔"
-            textSize = 10f
-            setTextColor(Color.WHITE)
-            background = createRoundBackground("#3F51B5", 14f)
-            setOnClickListener {
-                wakeUpFromDimming()
-                cycleTripPhase()
-            }
-        }
-        tripActionRow.addView(phaseCycleBtn, LinearLayout.LayoutParams(130, 95).apply { leftMargin = 10 })
-
+        tripActionRow.addView(tripActionBtn, LinearLayout.LayoutParams(0, 75, 1f))
         tripCard.addView(tripActionRow)
+
         container.addView(tripCard)
-
-        // --- Status Label ---
-        statusTv = TextView(this).apply {
-            text = "STATUS: PAUSED"
-            setTextColor(Color.YELLOW)
-            textSize = 11f
-            gravity = Gravity.CENTER
-            setPadding(0, 10, 0, 6)
-        }
-        container.addView(statusTv)
-
-        // --- Auto-Clicker Driver Buttons Row ---
-        val buttonRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
-        // Play/Pause
-        playPauseBtn = Button(this).apply {
-            text = "PLAY"
-            textSize = 13f
-            setTextColor(Color.WHITE)
-            background = createRoundBackground("#2E7D32", 14f)
-            setOnClickListener {
-                wakeUpFromDimming()
-                togglePlayPause()
-            }
-        }
-        buttonRow.addView(playPauseBtn, LinearLayout.LayoutParams(160, 115).apply { rightMargin = 8 })
-
-        // Voice Mic
-        micBtn = Button(this).apply {
-            text = "MIC"
-            textSize = 11f
-            setTextColor(Color.WHITE)
-            background = createRoundBackground("#37474F", 14f)
-            setOnClickListener {
-                wakeUpFromDimming()
-                if (voiceManager?.isListening() == true) {
-                    voiceManager?.stopListening()
-                    text = "MIC"
-                    background = createRoundBackground("#37474F", 14f)
-                } else {
-                    voiceManager?.startListening()
-                    text = "REC..."
-                    background = createRoundBackground("#D84315", 14f)
-                }
-            }
-        }
-        buttonRow.addView(micBtn, LinearLayout.LayoutParams(110, 115).apply { rightMargin = 8 })
-
-        // Add Target (+)
-        val addTargetBtn = Button(this).apply {
-            text = "+"
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            background = createRoundBackground("#37474F", 14f)
-            setOnClickListener {
-                wakeUpFromDimming()
-                if (targetPoints.size < 5) {
-                    val lastX = targetPoints.lastOrNull()?.x ?: 500
-                    val lastY = targetPoints.lastOrNull()?.y ?: 800
-                    addTargetMarker(lastX + 60, lastY + 60)
-                }
-            }
-        }
-        buttonRow.addView(addTargetBtn, LinearLayout.LayoutParams(90, 115).apply { rightMargin = 8 })
-
-        // Remove Target (-)
-        val removeTargetBtn = Button(this).apply {
-            text = "-"
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            background = createRoundBackground("#37474F", 14f)
-            setOnClickListener {
-                wakeUpFromDimming()
-                if (targetPoints.isNotEmpty()) {
-                    removeLastTargetMarker()
-                }
-            }
-        }
-        buttonRow.addView(removeTargetBtn, LinearLayout.LayoutParams(90, 115).apply { rightMargin = 8 })
-
-        // Mode Switcher
-        modeBtn = Button(this).apply {
-            text = prefsRepo.getSettings().operatingMode.name.substring(0, 5)
-            textSize = 10f
-            setTextColor(Color.WHITE)
-            background = createRoundBackground("#455A64", 14f)
-            setOnClickListener {
-                wakeUpFromDimming()
-                cycleOperatingMode()
-            }
-        }
-        buttonRow.addView(modeBtn, LinearLayout.LayoutParams(120, 115).apply { rightMargin = 8 })
-
-        // Preset Selector
-        presetBtn = Button(this).apply {
-            text = prefsRepo.getSettings().platformPreset.title.split(" ").first()
-            textSize = 10f
-            setTextColor(Color.WHITE)
-            background = createRoundBackground("#0288D1", 14f)
-            setOnClickListener {
-                wakeUpFromDimming()
-                cyclePreset()
-            }
-        }
-        buttonRow.addView(presetBtn, LinearLayout.LayoutParams(120, 115).apply { rightMargin = 8 })
-
-        // Emergency Stop Button
-        val stopBtn = Button(this).apply {
-            text = "STOP"
-            textSize = 11f
-            setTextColor(Color.WHITE)
-            background = createRoundBackground("#C62828", 14f)
-            setOnClickListener {
-                wakeUpFromDimming()
-                triggerEmergencyStop()
-            }
-        }
-        buttonRow.addView(stopBtn, LinearLayout.LayoutParams(130, 115))
-
-        container.addView(buttonRow)
 
         toolbarView = container
         windowManager.addView(container, layoutParams)
     }
 
     /**
-     * Floating Gesture Toggle - enables/disables gesture automation without leaving the ride app.
-     * Persists the new Master Control state and syncs AutoClickService immediately.
+     * Minimizes the full toolbar into a sleek floating circular bubble on screen edge.
+     */
+    private fun minimizeToBubble() {
+        isMinimized = true
+        toolbarView?.visibility = View.GONE
+        showFloatingBubble()
+    }
+
+    /**
+     * Restores full toolbar from minimized floating bubble.
+     */
+    private fun expandFromBubble() {
+        isMinimized = false
+        bubbleView?.visibility = View.GONE
+        toolbarView?.visibility = View.VISIBLE
+    }
+
+    /**
+     * Creates and displays the compact 52x52dp floating bubble icon.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun showFloatingBubble() {
+        if (bubbleView != null) {
+            bubbleView?.visibility = View.VISIBLE
+            return
+        }
+
+        val bParams = WindowManager.LayoutParams(
+            135, 135,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 20
+            y = 250
+            alpha = 1.0f
+        }
+        bubbleParams = bParams
+
+        val bubble = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = createCircleDrawable("#161922", "#00E5FF")
+            elevation = 20f
+        }
+
+        val iconTv = TextView(this).apply {
+            text = "⚡"
+            textSize = 20f
+            gravity = Gravity.CENTER
+        }
+        bubble.addView(iconTv)
+
+        bubble.setOnTouchListener(object : View.OnTouchListener {
+            private var initialX = 0
+            private var initialY = 0
+            private var touchX = 0f
+            private var touchY = 0f
+            private var isClick = false
+
+            override fun onTouch(v: View?, event: MotionEvent?): Boolean {
+                if (event == null) return false
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialX = bParams.x
+                        initialY = bParams.y
+                        touchX = event.rawX
+                        touchY = event.rawY
+                        isClick = true
+                        return true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = (event.rawX - touchX).toInt()
+                        val dy = (event.rawY - touchY).toInt()
+                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                            isClick = false
+                        }
+                        bParams.x = initialX + dx
+                        bParams.y = initialY + dy
+                        windowManager.updateViewLayout(bubble, bParams)
+                        return true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        if (isClick) {
+                            expandFromBubble()
+                        }
+                        return true
+                    }
+                }
+                return false
+            }
+        })
+
+        bubbleView = bubble
+        windowManager.addView(bubble, bParams)
+    }
+
+    /**
+     * Completely closes the floating overlay and disables Master Control.
      */
     private fun toggleGestureAutomation() {
         val current = prefsRepo.getSettings().masterControlEnabled
@@ -535,25 +624,32 @@ class OverlayService : Service() {
         prefsRepo.saveMasterControl(newState)
         if (newState) {
             AutoClickService.instance?.setClickingActive(true)
-            gestureToggleBtn?.text = getString(R.string.gesture_toggle_on)
+            gestureToggleBtn?.text = "⚡ AUTO ON"
             gestureToggleBtn?.background = createRoundBackground("#1B5E20", 14f)
-            statusTv?.text = "GESTURE: ON"
+            statusTv?.text = "🟢 AUTO-ACCEPT: ACTIVE"
             statusTv?.setTextColor(android.graphics.Color.parseColor("#00E676"))
             if (prefsRepo.getSettings().ttsFeedbackEnabled) {
-                ttsManager?.speak(getString(R.string.gesture_automation_enabled))
+                ttsManager?.speak("Auto-accept enabled")
             }
         } else {
             AutoClickService.instance?.setClickingActive(false)
-            gestureToggleBtn?.text = getString(R.string.gesture_toggle_off)
+            gestureToggleBtn?.text = "⏸ AUTO OFF"
             gestureToggleBtn?.background = createRoundBackground("#4A148C", 14f)
-            statusTv?.text = "GESTURE: OFF"
-            statusTv?.setTextColor(android.graphics.Color.parseColor("#FF5252"))
+            statusTv?.text = "⚪ AUTO-ACCEPT: OFF"
+            statusTv?.setTextColor(android.graphics.Color.parseColor("#8892A4"))
             if (prefsRepo.getSettings().ttsFeedbackEnabled) {
-                ttsManager?.speak(getString(R.string.gesture_automation_disabled))
+                ttsManager?.speak("Auto-accept paused")
             }
         }
         com.example.taptix.widget.TaptixWidgetProvider.notifyStateChanged(this)
         Log.d(TAG, "Gesture automation: ${if (newState) "ON" else "OFF"}")
+    }
+
+    private fun closeOverlayCompletely() {
+        prefsRepo.saveMasterControl(false)
+        AutoClickService.instance?.setClickingActive(false)
+        com.example.taptix.widget.TaptixWidgetProvider.notifyStateChanged(this)
+        stopSelf()
     }
 
     private fun removeFloatingToolbar() {
@@ -572,6 +668,11 @@ class OverlayService : Service() {
     fun updateTripStatus(info: TripStatusInfo) {
         currentTripInfo = info
         wakeUpFromDimming()
+        if (info.phase == TripPhase.OFFER_RECEIVED || info.phase == TripPhase.EN_ROUTE_PICKUP || info.phase == TripPhase.TRIP_IN_PROGRESS) {
+            tripCardContainer?.visibility = View.VISIBLE
+        } else {
+            tripCardContainer?.visibility = View.GONE
+        }
 
         tripBadgeTv?.text = info.phase.label
         tripBadgeTv?.background = createRoundBackground(info.phase.badgeColorHex, 14f)
@@ -693,9 +794,8 @@ class OverlayService : Service() {
         toolbarContainer?.background = createRoundBackground("#030303", 28f)
         tripCardContainer?.background = createRoundBackground("#08080C", 20f)
 
-        val intensity = prefsRepo.getSettings().nightModeDimIntensity.coerceIn(0.15f, 0.85f)
         toolbarParams?.let { params ->
-            params.alpha = intensity
+            params.alpha = 0.92f
             toolbarView?.let { windowManager.updateViewLayout(it, params) }
         }
 
