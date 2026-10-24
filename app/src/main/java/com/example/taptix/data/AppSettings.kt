@@ -9,10 +9,10 @@ import com.example.taptix.model.PlatformPreset
 data class AppSettings(
     val clickIntervalMs: Long = 300L,
     val operatingMode: OperatingMode = OperatingMode.SMART_ACCEPT,
-    val platformPreset: PlatformPreset = PlatformPreset.UBER,
+    val platformPreset: PlatformPreset = PlatformPreset.UNIVERSAL,
     val customKeywords: String = "ACCEPT, CONFIRM, RIDE",
     val autoPauseOnAccept: Boolean = true,
-    val motionSafetyLockEnabled: Boolean = true,
+    val motionSafetyLockEnabled: Boolean = false,
     val ttsFeedbackEnabled: Boolean = true,
     val swipeDurationMs: Long = 350L,
     val autoLaunchForTargetAppsEnabled: Boolean = true,

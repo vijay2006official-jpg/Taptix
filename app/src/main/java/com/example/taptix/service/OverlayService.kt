@@ -1,4 +1,4 @@
-package com.example.taptix.service
+﻿package com.example.taptix.service
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -76,6 +76,7 @@ class OverlayService : Service() {
     private var micBtn: Button? = null
     private var statusTv: TextView? = null
     private var dimToggleBtn: Button? = null
+    private var gestureToggleBtn: Button? = null  // Floating gesture enable/disable toggle
 
     // Trip Widget UI Views
     private var tripBadgeTv: TextView? = null
@@ -522,6 +523,37 @@ class OverlayService : Service() {
 
         toolbarView = container
         windowManager.addView(container, layoutParams)
+    }
+
+    /**
+     * Floating Gesture Toggle - enables/disables gesture automation without leaving the ride app.
+     * Persists the new Master Control state and syncs AutoClickService immediately.
+     */
+    private fun toggleGestureAutomation() {
+        val current = prefsRepo.getSettings().masterControlEnabled
+        val newState = !current
+        prefsRepo.saveMasterControl(newState)
+        if (newState) {
+            AutoClickService.instance?.setClickingActive(true)
+            gestureToggleBtn?.text = getString(R.string.gesture_toggle_on)
+            gestureToggleBtn?.background = createRoundBackground("#1B5E20", 14f)
+            statusTv?.text = "GESTURE: ON"
+            statusTv?.setTextColor(android.graphics.Color.parseColor("#00E676"))
+            if (prefsRepo.getSettings().ttsFeedbackEnabled) {
+                ttsManager?.speak(getString(R.string.gesture_automation_enabled))
+            }
+        } else {
+            AutoClickService.instance?.setClickingActive(false)
+            gestureToggleBtn?.text = getString(R.string.gesture_toggle_off)
+            gestureToggleBtn?.background = createRoundBackground("#4A148C", 14f)
+            statusTv?.text = "GESTURE: OFF"
+            statusTv?.setTextColor(android.graphics.Color.parseColor("#FF5252"))
+            if (prefsRepo.getSettings().ttsFeedbackEnabled) {
+                ttsManager?.speak(getString(R.string.gesture_automation_disabled))
+            }
+        }
+        com.example.taptix.widget.TaptixWidgetProvider.notifyStateChanged(this)
+        Log.d(TAG, "Gesture automation: ${if (newState) "ON" else "OFF"}")
     }
 
     private fun removeFloatingToolbar() {

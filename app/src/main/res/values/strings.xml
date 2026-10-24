@@ -38,4 +38,9 @@
     <string name="tts_service_paused">Auto clicker paused</string>
     <string name="tts_emergency_stop">Emergency stop triggered. All clicks stopped.</string>
     <string name="tts_motion_lock">Vehicle motion detected. Safety lock activated.</string>
+    <!-- Gesture Toggle (New v2.1) -->
+    <string name="gesture_toggle_on">⚡ GESTURE ON</string>
+    <string name="gesture_toggle_off">⏸ GESTURE OFF</string>
+    <string name="gesture_automation_enabled">Gesture automation enabled</string>
+    <string name="gesture_automation_disabled">Gesture automation disabled</string>
 </resources>
