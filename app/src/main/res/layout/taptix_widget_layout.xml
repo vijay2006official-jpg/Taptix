@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg"
-    android:gravity="center"
+    android:gravity="center_vertical"
     android:orientation="horizontal"
     android:padding="12dp">
 
@@ -37,11 +37,19 @@
             android:text="OFF • Tap to Start"
             android:textColor="#8892A4"
             android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_profile"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Profile: All Zones"
+            android:textColor="#38BDF8"
+            android:textSize="10sp" />
     </LinearLayout>
 
     <Button
         android:id="@+id/widget_toggle_btn"
-        android:layout_width="68dp"
+        android:layout_width="64dp"
         android:layout_height="38dp"
         android:background="@drawable/widget_btn_bg"
         android:text="START"

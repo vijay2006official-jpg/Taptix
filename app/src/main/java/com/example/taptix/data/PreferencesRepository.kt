@@ -307,5 +307,18 @@ class PreferencesRepository(context: Context) {
     fun saveScheduleConfig(config: ScheduleConfig) {
         prefs.edit().putString("key_schedule_config_json", config.toJson().toString()).apply()
     }
-}
 
+    // Smart Accept Rules (Feature 3 & 4)
+    fun getSmartAcceptRules(): com.example.taptix.model.SmartAcceptRules {
+        val raw = prefs.getString("key_smart_accept_rules_json", null) ?: return com.example.taptix.model.SmartAcceptRules()
+        return try {
+            com.example.taptix.model.SmartAcceptRules.fromJson(org.json.JSONObject(raw))
+        } catch (e: Exception) {
+            com.example.taptix.model.SmartAcceptRules()
+        }
+    }
+
+    fun saveSmartAcceptRules(rules: com.example.taptix.model.SmartAcceptRules) {
+        prefs.edit().putString("key_smart_accept_rules_json", rules.toJson().toString()).apply()
+    }
+}

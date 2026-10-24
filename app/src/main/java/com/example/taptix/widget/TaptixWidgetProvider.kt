@@ -10,13 +10,14 @@ import android.graphics.Color
 import android.os.Build
 import android.widget.RemoteViews
 import com.example.taptix.MainActivity
+import com.example.taptix.MapZoneActivity
 import com.example.taptix.R
 import com.example.taptix.data.PreferencesRepository
 import com.example.taptix.service.AutoClickService
 import com.example.taptix.service.OverlayService
 
 /**
- * 1-Tap Home Screen Widget to toggle Taptix Master Auto-Accept without opening the app.
+ * 1-Tap Home Screen Widget to toggle Taptix Master Auto-Accept and display active profile state.
  */
 class TaptixWidgetProvider : AppWidgetProvider() {
 
@@ -49,22 +50,26 @@ class TaptixWidgetProvider : AppWidgetProvider() {
                 AutoClickService.instance?.setClickingActive(false)
             }
 
-            // Update all widgets
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(ComponentName(context, TaptixWidgetProvider::class.java))
-            for (id in ids) {
-                updateAppWidget(context, manager, id)
-            }
+            notifyStateChanged(context)
         }
     }
 
     companion object {
         const val ACTION_TOGGLE_MASTER = "com.example.taptix.ACTION_TOGGLE_MASTER"
 
+        fun notifyStateChanged(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            val ids = manager.getAppWidgetIds(ComponentName(context, TaptixWidgetProvider::class.java))
+            for (id in ids) {
+                updateAppWidget(context, manager, id)
+            }
+        }
+
         fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val prefs = PreferencesRepository(context)
             val settings = prefs.getSettings()
             val isActive = settings.masterControlEnabled
+            val activeProfile = prefs.getAreaGroups().firstOrNull { it.isSelected }?.name ?: "All Zones"
 
             val views = RemoteViews(context.packageName, R.layout.taptix_widget_layout)
 
@@ -76,6 +81,14 @@ class TaptixWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_root, openAppPending)
 
+            // Open Map Zones & Area Profiles on profile text click
+            val openMapIntent = Intent(context, MapZoneActivity::class.java)
+            val openMapPending = PendingIntent.getActivity(
+                context, 1, openMapIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_profile, openMapPending)
+
             // Toggle on button click
             val toggleIntent = Intent(context, TaptixWidgetProvider::class.java).apply {
                 action = ACTION_TOGGLE_MASTER
@@ -85,6 +98,8 @@ class TaptixWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_toggle_btn, togglePending)
+
+            views.setTextViewText(R.id.widget_profile, "Profile: $activeProfile")
 
             if (isActive) {
                 views.setTextViewText(R.id.widget_status, "🟢 ACTIVE • Auto-Accepting")

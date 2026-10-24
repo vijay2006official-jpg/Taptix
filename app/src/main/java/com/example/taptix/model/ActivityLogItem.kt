@@ -1,7 +1,7 @@
 package com.example.taptix.model
 
 /**
- * Audit log entry capturing auto-clicker decisions and actions.
+ * Audit log entry capturing auto-clicker decisions, evaluated rules, and outcomes.
  */
 data class ActivityLogItem(
     val id: Long = System.currentTimeMillis(),
@@ -9,7 +9,11 @@ data class ActivityLogItem(
     val appName: String,
     val actionText: String,
     val status: LogStatus,
-    val details: String = ""
+    val details: String = "",
+    val fare: Double? = null,
+    val distanceKm: Double? = null,
+    val destination: String = "",
+    val rulesEvaluated: String = ""
 )
 
 enum class LogStatus {

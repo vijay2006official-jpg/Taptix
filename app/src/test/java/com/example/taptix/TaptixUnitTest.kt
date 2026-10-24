@@ -196,4 +196,112 @@ class TaptixUnitTest {
         assertTrue(statuses.contains(LogStatus.OUTSIDE_ZONE))
         assertTrue(statuses.contains(LogStatus.SYSTEM_EVENT))
     }
+
+    @Test
+    fun testOfferParser_fareAndDistanceExtraction() {
+        val sampleText = """
+            Uber Premier
+            Fare: ₹ 340.50
+            Pickup: 2.4 km away
+            Drop: Airport Terminal 1
+            ACCEPT
+        """.trimIndent()
+
+        val fare = com.example.taptix.engine.OfferParser.extractFare(sampleText)
+        assertEquals(340.50, fare ?: 0.0, 0.01)
+
+        val distance = com.example.taptix.engine.OfferParser.extractDistanceKm(sampleText)
+        assertEquals(2.4, distance ?: 0.0, 0.01)
+    }
+
+    @Test
+    fun testOfferRuleEngine_minFareCondition() {
+        val rules = com.example.taptix.model.SmartAcceptRules(
+            minFareEnabled = true,
+            minFareAmount = 250.0,
+            includeKeywordsEnabled = true
+        )
+
+        val highFareOffer = com.example.taptix.model.OfferDetails(
+            packageName = "com.ubercab.driver",
+            rawText = "ACCEPT RIDE FARE ₹300",
+            fare = 300.0
+        )
+        val highRes = com.example.taptix.engine.OfferRuleEngine.evaluate(
+            offer = highFareOffer,
+            rules = rules,
+            includeKeywords = listOf("ACCEPT")
+        )
+        assertTrue(highRes.isAccepted)
+
+        val lowFareOffer = com.example.taptix.model.OfferDetails(
+            packageName = "com.ubercab.driver",
+            rawText = "ACCEPT RIDE FARE ₹180",
+            fare = 180.0
+        )
+        val lowRes = com.example.taptix.engine.OfferRuleEngine.evaluate(
+            offer = lowFareOffer,
+            rules = rules,
+            includeKeywords = listOf("ACCEPT")
+        )
+        assertFalse(lowRes.isAccepted)
+        assertTrue(lowRes.rejectedReason?.contains("below minimum") == true)
+    }
+
+    @Test
+    fun testOfferRuleEngine_maxPickupDistanceCondition() {
+        val rules = com.example.taptix.model.SmartAcceptRules(
+            maxPickupDistanceEnabled = true,
+            maxPickupDistanceKm = 3.0,
+            includeKeywordsEnabled = true
+        )
+
+        val nearOffer = com.example.taptix.model.OfferDetails(
+            packageName = "com.olacabs.driver",
+            rawText = "ACCEPT 1.5 KM AWAY",
+            pickupDistanceKm = 1.5
+        )
+        val nearRes = com.example.taptix.engine.OfferRuleEngine.evaluate(
+            offer = nearOffer,
+            rules = rules,
+            includeKeywords = listOf("ACCEPT")
+        )
+        assertTrue(nearRes.isAccepted)
+
+        val farOffer = com.example.taptix.model.OfferDetails(
+            packageName = "com.olacabs.driver",
+            rawText = "ACCEPT 5.2 KM AWAY",
+            pickupDistanceKm = 5.2
+        )
+        val farRes = com.example.taptix.engine.OfferRuleEngine.evaluate(
+            offer = farOffer,
+            rules = rules,
+            includeKeywords = listOf("ACCEPT")
+        )
+        assertFalse(farRes.isAccepted)
+        assertTrue(farRes.rejectedReason?.contains("exceeds maximum") == true)
+    }
+
+    @Test
+    fun testOfferRuleEngine_unparsedDataSafetyFallback() {
+        val rulesStrict = com.example.taptix.model.SmartAcceptRules(
+            minFareEnabled = true,
+            minFareAmount = 200.0,
+            fallbackOnUnparsedData = com.example.taptix.model.UnparsedDataFallback.REJECT
+        )
+
+        val unknownFareOffer = com.example.taptix.model.OfferDetails(
+            packageName = "com.rapido.captain",
+            rawText = "ACCEPT ORDER",
+            fare = null // Unparsed fare
+        )
+
+        val res = com.example.taptix.engine.OfferRuleEngine.evaluate(
+            offer = unknownFareOffer,
+            rules = rulesStrict,
+            includeKeywords = listOf("ACCEPT")
+        )
+        assertFalse(res.isAccepted)
+        assertTrue(res.rejectedReason?.contains("Could not parse fare") == true)
+    }
 }

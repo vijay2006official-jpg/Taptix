@@ -17,7 +17,16 @@ class ActivityLogManager(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     @Synchronized
-    fun addLog(appName: String, actionText: String, status: LogStatus, details: String = "") {
+    fun addLog(
+        appName: String,
+        actionText: String,
+        status: LogStatus,
+        details: String = "",
+        fare: Double? = null,
+        distanceKm: Double? = null,
+        destination: String = "",
+        rulesEvaluated: String = ""
+    ) {
         val now = System.currentTimeMillis()
         val currentLogs = getLogs().toMutableList()
         val newItem = ActivityLogItem(
@@ -26,7 +35,11 @@ class ActivityLogManager(context: Context) {
             appName = appName,
             actionText = actionText,
             status = status,
-            details = details
+            details = details,
+            fare = fare,
+            distanceKm = distanceKm,
+            destination = destination,
+            rulesEvaluated = rulesEvaluated
         )
         currentLogs.add(0, newItem)
 
@@ -52,6 +65,9 @@ class ActivityLogManager(context: Context) {
                 // Filter expired entries on read
                 if (ts < sevenDaysAgo) continue
 
+                val fareVal = if (obj.has("fare") && !obj.isNull("fare")) obj.getDouble("fare") else null
+                val distVal = if (obj.has("distanceKm") && !obj.isNull("distanceKm")) obj.getDouble("distanceKm") else null
+
                 list.add(
                     ActivityLogItem(
                         id = obj.optLong("id", ts),
@@ -63,7 +79,11 @@ class ActivityLogManager(context: Context) {
                         } catch (e: Exception) {
                             LogStatus.ACCEPTED
                         },
-                        details = obj.optString("details", "")
+                        details = obj.optString("details", ""),
+                        fare = fareVal,
+                        distanceKm = distVal,
+                        destination = obj.optString("destination", ""),
+                        rulesEvaluated = obj.optString("rulesEvaluated", "")
                     )
                 )
             }
@@ -98,6 +118,10 @@ class ActivityLogManager(context: Context) {
                 put("actionText", item.actionText)
                 put("status", item.status.name)
                 put("details", item.details)
+                if (item.fare != null) put("fare", item.fare)
+                if (item.distanceKm != null) put("distanceKm", item.distanceKm)
+                if (item.destination.isNotBlank()) put("destination", item.destination)
+                if (item.rulesEvaluated.isNotBlank()) put("rulesEvaluated", item.rulesEvaluated)
             }
             arr.put(obj)
         }
