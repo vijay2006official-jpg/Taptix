@@ -6,4 +6,5 @@
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
-    android:notificationTimeout="100" />
+    android:notificationTimeout="200"
+    android:packageNames="com.ubercab.driver,com.olacabs.driver,com.olacabs.partner,com.rapido.captain,com.rapido.passenger,com.indriver,sinet.startup.inDriver,in.juspay.nammayatripartner,com.theporter.partner,me.lyft.driver,com.grabtaxi.driver2,com.dd.driver,com.example.taptix" />

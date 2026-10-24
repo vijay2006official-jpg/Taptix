@@ -1,4 +1,4 @@
-package com.example.taptix.service
+﻿package com.example.taptix.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
@@ -51,7 +51,10 @@ class AutoClickService : AccessibilityService() {
     private var lastAutoLaunchedPackage: String = ""
     private var isKeyboardActive = false
 
-    var onStateChangedListener: ((isRunning: Boolean, mode: OperatingMode) -> Unit)? = null
+    var onStateChangedListener: ((isRunning: Boolean, mode: OperatingMode) -> Unit)? = null
+
+    private var motionDetector: MotionSafetyDetector? = null
+    private val isDrivingDetected = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override fun onCreate() {
         super.onCreate()
@@ -65,7 +68,9 @@ class AutoClickService : AccessibilityService() {
         super.onServiceConnected()
         isServiceRunning.set(true)
         isClickingActive.set(true)
-        Log.d(TAG, "AutoClickService connected and activated")
+        Log.d(TAG, "AutoClickService connected and activated")
+        // Start motion safety detector if enabled in settings
+        if (prefsRepo.getSettings().motionSafetyLockEnabled) { startMotionDetector() }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -79,6 +84,7 @@ class AutoClickService : AccessibilityService() {
         super.onDestroy()
         isServiceRunning.set(false)
         stopClicking()
+        stopMotionDetector()
         ttsManager?.shutdown()
         ttsManager = null
         instance = null
@@ -160,6 +166,24 @@ class AutoClickService : AccessibilityService() {
 
     override fun onInterrupt() {
         stopClicking()
+    }
+
+    private fun startMotionDetector() {
+        if (motionDetector == null) {
+            motionDetector = MotionSafetyDetector(this) { isDriving ->
+                isDrivingDetected.set(isDriving)
+                val msg = if (isDriving) "Vehicle motion detected. Safety lock activated." else "Vehicle stopped. Auto-accept ready."
+                Log.d(TAG, msg)
+                if (prefsRepo.getSettings().ttsFeedbackEnabled) { ttsManager?.speak(msg) }
+            }
+            motionDetector?.start()
+        }
+    }
+
+    private fun stopMotionDetector() {
+        motionDetector?.stop()
+        motionDetector = null
+        isDrivingDetected.set(false)
     }
 
     // --- Voice Command Controls ---
@@ -366,6 +390,9 @@ class AutoClickService : AccessibilityService() {
         val schedule = prefsRepo.getScheduleConfig()
         if (!schedule.isWithinActiveWindow()) return
 
+        // Motion Safety Lock gate — skip auto-accept while vehicle is moving
+        if (settings.motionSafetyLockEnabled && isDrivingDetected.get()) return
+
         val now = System.currentTimeMillis()
         if (now - lastAcceptTime < COOLDOWN_MS) return
 
@@ -417,6 +444,15 @@ class AutoClickService : AccessibilityService() {
             val isDemoScreen = appPkg == packageName // Allow in-app demo screen testing only
             if (!isKnownTarget && !isDemoScreen && !settings.ultraModeEnabled) {
                 // Not a supported ride partner app, ignore
+                return false
+            }
+        }
+
+        // Per-app profile: check if auto-accept is enabled for this specific app
+        if (appPkg.isNotBlank()) {
+            val profile = prefsRepo.getAppProfile(appPkg)
+            if (profile != null && !profile.enabled) {
+                Log.d(TAG, "Per-app profile disabled for $ppPkg, skipping")
                 return false
             }
         }
@@ -631,6 +667,8 @@ class AutoClickService : AccessibilityService() {
             if (result != null) {
                 return result
             }
+            // Recycle non-matching child to prevent memory leaks
+            try { child.recycle() } catch (_: Exception) {}
         }
         return null
     }
@@ -657,6 +695,7 @@ class AutoClickService : AccessibilityService() {
             val child = node.getChild(i) ?: continue
             val found = findAnyKeywordInTree(child, keywords)
             if (found != null) return found
+            try { child.recycle() } catch (_: Exception) {}
         }
         return null
     }

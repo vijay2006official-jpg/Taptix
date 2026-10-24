@@ -12,7 +12,8 @@ data class MapZone(
     val lat: Double,
     val lng: Double,
     val radiusKm: Double = 2.0,
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    val isPickupZone: Boolean = true
 ) {
     fun toJson(): JSONObject {
         val obj = JSONObject()
@@ -22,6 +23,7 @@ data class MapZone(
         obj.put("lng", lng)
         obj.put("radiusKm", radiusKm)
         obj.put("isEnabled", isEnabled)
+        obj.put("isPickupZone", isPickupZone)
         return obj
     }
 
@@ -33,7 +35,8 @@ data class MapZone(
                 lat = obj.optDouble("lat", 0.0),
                 lng = obj.optDouble("lng", 0.0),
                 radiusKm = obj.optDouble("radiusKm", 2.0),
-                isEnabled = obj.optBoolean("isEnabled", true)
+                isEnabled = obj.optBoolean("isEnabled", true),
+                isPickupZone = obj.optBoolean("isPickupZone", true)
             )
         }
     }

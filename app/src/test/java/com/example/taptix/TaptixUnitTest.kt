@@ -2,12 +2,18 @@ package com.example.taptix
 
 import com.example.taptix.data.AppSettings
 import com.example.taptix.data.ScheduleConfig
+import com.example.taptix.model.ActivityLogItem
 import com.example.taptix.model.AreaGroup
 import com.example.taptix.model.LogStatus
 import com.example.taptix.model.MapZone
+import com.example.taptix.model.OfferDetails
 import com.example.taptix.model.OperatingMode
 import com.example.taptix.model.PlatformPreset
+import com.example.taptix.model.SmartAcceptRules
 import com.example.taptix.model.TargetPoint
+import com.example.taptix.model.UnparsedDataFallback
+import com.example.taptix.engine.OfferParser
+import com.example.taptix.engine.OfferRuleEngine
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.Calendar
@@ -76,7 +82,8 @@ class TaptixUnitTest {
             lat = 12.9716,
             lng = 77.5946,
             radiusKm = 3.5,
-            isEnabled = true
+            isEnabled = true,
+            isPickupZone = true
         )
         val json = zone.toJson()
         assertEquals("test-zone-1", json.getString("id"))
@@ -85,6 +92,7 @@ class TaptixUnitTest {
         assertEquals(77.5946, json.getDouble("lng"), 0.0001)
         assertEquals(3.5, json.getDouble("radiusKm"), 0.0001)
         assertTrue(json.getBoolean("isEnabled"))
+        assertTrue(json.getBoolean("isPickupZone"))
 
         val restored = MapZone.fromJson(json)
         assertEquals(zone.id, restored.id)
@@ -93,6 +101,7 @@ class TaptixUnitTest {
         assertEquals(zone.lng, restored.lng, 0.0001)
         assertEquals(zone.radiusKm, restored.radiusKm, 0.0001)
         assertEquals(zone.isEnabled, restored.isEnabled)
+        assertEquals(zone.isPickupZone, restored.isPickupZone)
     }
 
     @Test
@@ -207,39 +216,39 @@ class TaptixUnitTest {
             ACCEPT
         """.trimIndent()
 
-        val fare = com.example.taptix.engine.OfferParser.extractFare(sampleText)
+        val fare = OfferParser.extractFare(sampleText)
         assertEquals(340.50, fare ?: 0.0, 0.01)
 
-        val distance = com.example.taptix.engine.OfferParser.extractDistanceKm(sampleText)
+        val distance = OfferParser.extractDistanceKm(sampleText)
         assertEquals(2.4, distance ?: 0.0, 0.01)
     }
 
     @Test
     fun testOfferRuleEngine_minFareCondition() {
-        val rules = com.example.taptix.model.SmartAcceptRules(
+        val rules = SmartAcceptRules(
             minFareEnabled = true,
             minFareAmount = 250.0,
             includeKeywordsEnabled = true
         )
 
-        val highFareOffer = com.example.taptix.model.OfferDetails(
+        val highFareOffer = OfferDetails(
             packageName = "com.ubercab.driver",
             rawText = "ACCEPT RIDE FARE ₹300",
             fare = 300.0
         )
-        val highRes = com.example.taptix.engine.OfferRuleEngine.evaluate(
+        val highRes = OfferRuleEngine.evaluate(
             offer = highFareOffer,
             rules = rules,
             includeKeywords = listOf("ACCEPT")
         )
         assertTrue(highRes.isAccepted)
 
-        val lowFareOffer = com.example.taptix.model.OfferDetails(
+        val lowFareOffer = OfferDetails(
             packageName = "com.ubercab.driver",
             rawText = "ACCEPT RIDE FARE ₹180",
             fare = 180.0
         )
-        val lowRes = com.example.taptix.engine.OfferRuleEngine.evaluate(
+        val lowRes = OfferRuleEngine.evaluate(
             offer = lowFareOffer,
             rules = rules,
             includeKeywords = listOf("ACCEPT")
@@ -250,30 +259,30 @@ class TaptixUnitTest {
 
     @Test
     fun testOfferRuleEngine_maxPickupDistanceCondition() {
-        val rules = com.example.taptix.model.SmartAcceptRules(
+        val rules = SmartAcceptRules(
             maxPickupDistanceEnabled = true,
             maxPickupDistanceKm = 3.0,
             includeKeywordsEnabled = true
         )
 
-        val nearOffer = com.example.taptix.model.OfferDetails(
+        val nearOffer = OfferDetails(
             packageName = "com.olacabs.driver",
             rawText = "ACCEPT 1.5 KM AWAY",
             pickupDistanceKm = 1.5
         )
-        val nearRes = com.example.taptix.engine.OfferRuleEngine.evaluate(
+        val nearRes = OfferRuleEngine.evaluate(
             offer = nearOffer,
             rules = rules,
             includeKeywords = listOf("ACCEPT")
         )
         assertTrue(nearRes.isAccepted)
 
-        val farOffer = com.example.taptix.model.OfferDetails(
+        val farOffer = OfferDetails(
             packageName = "com.olacabs.driver",
             rawText = "ACCEPT 5.2 KM AWAY",
             pickupDistanceKm = 5.2
         )
-        val farRes = com.example.taptix.engine.OfferRuleEngine.evaluate(
+        val farRes = OfferRuleEngine.evaluate(
             offer = farOffer,
             rules = rules,
             includeKeywords = listOf("ACCEPT")
@@ -283,25 +292,81 @@ class TaptixUnitTest {
     }
 
     @Test
-    fun testOfferRuleEngine_unparsedDataSafetyFallback() {
-        val rulesStrict = com.example.taptix.model.SmartAcceptRules(
-            minFareEnabled = true,
-            minFareAmount = 200.0,
-            fallbackOnUnparsedData = com.example.taptix.model.UnparsedDataFallback.REJECT
+    fun testOfferRuleEngine_haversineGeofenceZone() {
+        // Zone center at Chennai Airport (12.9941, 80.1709), radius 3 km
+        val airportZone = MapZone(
+            id = "zone-airport",
+            name = "Chennai Airport",
+            lat = 12.9941,
+            lng = 80.1709,
+            radiusKm = 3.0,
+            isEnabled = true
         )
 
-        val unknownFareOffer = com.example.taptix.model.OfferDetails(
+        // Driver located 1 km away from airport
+        val driverNear = Pair(12.9900, 80.1750)
+        val offerNear = OfferDetails(packageName = "com.ubercab.driver", rawText = "ACCEPT RIDE")
+        val resNear = OfferRuleEngine.evaluate(
+            offer = offerNear,
+            rules = SmartAcceptRules(includeKeywordsEnabled = false),
+            activeZones = listOf(airportZone),
+            driverLocation = driverNear
+        )
+        assertTrue(resNear.isAccepted)
+
+        // Driver located 15 km away in Central Chennai
+        val driverFar = Pair(13.0827, 80.2707)
+        val offerFar = OfferDetails(packageName = "com.ubercab.driver", rawText = "ACCEPT RIDE")
+        val resFar = OfferRuleEngine.evaluate(
+            offer = offerFar,
+            rules = SmartAcceptRules(includeKeywordsEnabled = false),
+            activeZones = listOf(airportZone),
+            driverLocation = driverFar
+        )
+        assertFalse(resFar.isAccepted)
+        assertTrue(resFar.rejectedReason?.contains("Outside all active work zones") == true)
+    }
+
+    @Test
+    fun testOfferRuleEngine_unparsedDataSafetyFallback() {
+        val rulesStrict = SmartAcceptRules(
+            minFareEnabled = true,
+            minFareAmount = 200.0,
+            fallbackOnUnparsedData = UnparsedDataFallback.REJECT
+        )
+
+        val unknownFareOffer = OfferDetails(
             packageName = "com.rapido.captain",
             rawText = "ACCEPT ORDER",
             fare = null // Unparsed fare
         )
 
-        val res = com.example.taptix.engine.OfferRuleEngine.evaluate(
+        val res = OfferRuleEngine.evaluate(
             offer = unknownFareOffer,
             rules = rulesStrict,
             includeKeywords = listOf("ACCEPT")
         )
         assertFalse(res.isAccepted)
         assertTrue(res.rejectedReason?.contains("Could not parse fare") == true)
+    }
+
+    @Test
+    fun testActivityLogItem_dataModel() {
+        val log = ActivityLogItem(
+            id = 1001L,
+            timestamp = 1600000000L,
+            appName = "Uber Driver",
+            actionText = "ACCEPT",
+            status = LogStatus.ACCEPTED,
+            details = "Matched Min Fare",
+            fare = 350.0,
+            distanceKm = 2.1,
+            destination = "Airport",
+            rulesEvaluated = "Min Fare, Map Zone"
+        )
+        assertEquals("Uber Driver", log.appName)
+        assertEquals(LogStatus.ACCEPTED, log.status)
+        assertEquals(350.0, log.fare ?: 0.0, 0.01)
+        assertEquals(2.1, log.distanceKm ?: 0.0, 0.01)
     }
 }

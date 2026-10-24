@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taptix Privacy Policy</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 16px; max-width: 800px; margin: 0 auto; color: #cdd6f4; background: #1e1e2e; line-height: 1.7; }
+        h1 { color: #89b4fa; font-size: 24px; }
+        h2 { color: #cba6f7; font-size: 18px; margin-top: 24px; border-bottom: 1px solid #313244; padding-bottom: 6px; }
+        .updated { color: #6c7086; font-size: 14px; margin-bottom: 20px; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 8px; }
+        strong { color: #f38ba8; }
+        a { color: #89dceb; }
+    </style>
+</head>
+<body>
+    <h1>🚖 Taptix Privacy Policy</h1>
+    <p class="updated">Last Updated: October 2026 | Version 2.1</p>
+
+    <h2>1. Overview</h2>
+    <p>Taptix is a driver-assistance app that helps ride-hailing and delivery drivers auto-accept requests hands-free. Privacy is built in — <strong>we do not operate any servers, do not collect analytics, and do not share any data.</strong></p>
+
+    <h2>2. Information We Collect</h2>
+    <ul>
+        <li><strong>Location Data:</strong> Used entirely on-device for Map Zone geofencing. Never transmitted to any server.</li>
+        <li><strong>Screen Content (Accessibility):</strong> Read locally to detect ride request buttons. No screen content is stored, logged, or transmitted outside your device.</li>
+        <li><strong>Settings &amp; Preferences:</strong> Stored locally using Android SharedPreferences on your device.</li>
+        <li><strong>Activity Logs:</strong> App name, action type (Accepted/Rejected), and timestamp — stored only on your device and auto-deleted after 7 days.</li>
+    </ul>
+
+    <h2>3. What We Never Collect</h2>
+    <ul>
+        <li>Passenger names, phone numbers, or addresses</li>
+        <li>Exact fare amounts in activity logs</li>
+        <li>Screenshots, screen recordings, or photos</li>
+        <li>Contact list, call logs, or SMS</li>
+        <li>Device identifiers (IMEI, advertising ID)</li>
+        <li>Browsing history or app usage outside Taptix</li>
+    </ul>
+
+    <h2>4. Network Access</h2>
+    <p>Taptix connects to the internet <strong>only to check for app updates</strong> from GitHub Releases. All connections use HTTPS. No personal data is included in update requests.</p>
+
+    <h2>5. Permissions Explained</h2>
+    <ul>
+        <li><strong>Accessibility Service:</strong> Required to read screen content and simulate taps for auto-accepting ride requests. This is the core feature of Taptix.</li>
+        <li><strong>Display Over Other Apps:</strong> Required for the floating control toolbar that overlays ride-hailing apps.</li>
+        <li><strong>Location (Fine &amp; Coarse):</strong> Required for Map Zone features. Used only locally to check if you are within your configured work area.</li>
+        <li><strong>Microphone (Record Audio):</strong> Used only when Voice Commands feature is enabled. You can disable this at any time.</li>
+        <li><strong>Vibration:</strong> For haptic feedback when rides are accepted. Can be disabled in Settings.</li>
+        <li><strong>Internet:</strong> Only for checking app updates from GitHub.</li>
+        <li><strong>Notifications:</strong> To show the persistent "Taptix is active" notification required for foreground services.</li>
+        <li><strong>Battery Optimization Exemption:</strong> To prevent Android from killing background services while you're driving.</li>
+    </ul>
+
+    <h2>6. Accessibility Service Disclosure</h2>
+    <p>Taptix uses Android's Accessibility Service to scan screen content and simulate button taps on ride-hailing apps such as Uber Driver, Ola Driver, Rapido Captain, inDrive, Namma Yatri, and Porter. This data is processed exclusively on your device and is never stored persistently or transmitted.</p>
+
+    <h2>7. Third-Party Services</h2>
+    <p>Taptix does not integrate any third-party analytics (e.g., Firebase, Crashlytics), advertising networks, or tracking libraries.</p>
+
+    <h2>8. Data Retention</h2>
+    <ul>
+        <li>Activity logs: auto-deleted after 7 days, capped at 150 entries</li>
+        <li>Settings: retained until you uninstall the app or clear app data</li>
+        <li>Location: never persisted beyond the current session check</li>
+    </ul>
+
+    <h2>9. Data Sharing</h2>
+    <p>We do not sell, trade, rent, or share any user data with third parties.</p>
+
+    <h2>10. Children's Privacy</h2>
+    <p>Taptix is designed for professional drivers (18+) and is not intended for use by minors.</p>
+
+    <h2>11. Changes to This Policy</h2>
+    <p>Any changes to this policy will be included in app update release notes on GitHub.</p>
+
+    <h2>12. Contact</h2>
+    <p>For questions, open an issue at: <a href="https://github.com/vijay2006official-jpg/Taptix">github.com/vijay2006official-jpg/Taptix</a></p>
+</body>
+</html>

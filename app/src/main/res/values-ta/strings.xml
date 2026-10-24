@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Taptix – ஆட்டோ கிளிக்கர்</string>
+    <string name="accessibility_service_name">Taptix ஆட்டோ கிளிக்கர் எஞ்சின்</string>
+    <string name="accessibility_service_description">ட்ரைவர்களுக்கு ஹேண்ட்ஸ்-ஃப்ரீயாக டிரிப் கோரிக்கைகளை ஏற்றுக்கொள்ள உதவ ஆட்டோமேட்டட் ஸ்க்ரீன் டச் மற்றும் ஜெஸ்ச்சர் திறன்களை வழங்குகிறது.</string>
+
+    <!-- Permissions -->
+    <string name="permission_accessibility_title">அணுகல்தன்மை சேவை</string>
+    <string name="permission_accessibility_desc">ஸ்மார்ட் ஏற்றுக்கொள்ளலுக்கு டேப்களை உருவகப்படுத்தவும் ஸ்க்ரீன் டெக்ஸ்ட்டை பகுப்பாய்வு செய்யவும் தேவை.</string>
+    <string name="permission_overlay_title">பிற ஆப்ஸ் மீது காட்சி</string>
+    <string name="permission_overlay_desc">ரைட்-ஹைலிங் ஆப்ஸ் மீது ஃப்ளோட்டிங் டிரைவர் கண்ட்ரோல் டூல்பாரைக் காட்ட தேவை.</string>
+    <string name="grant_permission">அனுமதி வழங்கு</string>
+    <string name="permission_granted">செயலில் &amp; தயார்</string>
+    <string name="permission_missing">அனுமதி தேவை</string>
+
+    <!-- Overlay &amp; Service Controls -->
+    <string name="start_floating_control">ஃப்ளோட்டிங் டூல்பார் தொடங்கு</string>
+    <string name="stop_floating_control">ஃப்ளோட்டிங் டூல்பார் நிறுத்து</string>
+    <string name="emergency_stop">அவசர நிறுத்தம்</string>
+    <string name="service_running_notification">Taptix டிரைவர் உதவியாளர் செயலில்</string>
+    <string name="notification_channel_name">Taptix டிரைவர் சேவை</string>
+    <string name="notification_channel_desc">ஃப்ளோட்டிங் டிரைவர் டூல்பாருக்கான செயலில் உள்ள நிலை மற்றும் விரைவு கட்டுப்பாடுகளைக் காட்டுகிறது.</string>
+
+    <!-- Operating Modes -->
+    <string name="mode_single_target">ஒற்றை இலக்கு</string>
+    <string name="mode_multi_target">பல இலக்குகள்</string>
+    <string name="mode_smart_accept">ஸ்மார்ட் ஏற்றுக்கொள்ளல் (OCR)</string>
+
+    <!-- Presets -->
+    <string name="preset_uber">Uber டிரைவர்</string>
+    <string name="preset_ola">Ola டிரைவர்</string>
+    <string name="preset_rapido">Rapido கேப்டன்</string>
+    <string name="preset_lyft">Lyft டிரைவர்</string>
+    <string name="preset_custom">தனிப்பயன் ஆப்</string>
+
+    <!-- Audio Announcements -->
+    <string name="tts_service_started">Taptix ஆட்டோ கிளிக்கர் தொடங்கியது</string>
+    <string name="tts_ride_accepted">சவாரி கோரிக்கை ஏற்றுக்கொள்ளப்பட்டது!</string>
+    <string name="tts_service_paused">ஆட்டோ கிளிக்கர் இடைநிறுத்தப்பட்டது</string>
+    <string name="tts_emergency_stop">அவசர நிறுத்தம் தூண்டப்பட்டது. அனைத்து கிளிக்குகளும் நிறுத்தப்பட்டன.</string>
+    <string name="tts_motion_lock">வாகன இயக்கம் கண்டறியப்பட்டது. பாதுகாப்பு பூட்டு செயல்படுத்தப்பட்டது.</string>
+</resources>

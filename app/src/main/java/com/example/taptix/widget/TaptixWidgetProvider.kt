@@ -1,4 +1,4 @@
-package com.example.taptix.widget
+﻿package com.example.taptix.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Build
+import android.util.Log
 import android.widget.RemoteViews
 import com.example.taptix.MainActivity
 import com.example.taptix.MapZoneActivity
@@ -30,6 +31,14 @@ class TaptixWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == ACTION_TOGGLE_MASTER) {
+            // Security: widgets use FLAG_IMMUTABLE PendingIntents so external apps cannot
+            // easily forge them, but as defense-in-depth we also ignore intents that carry
+            // a spoofed package name extra that doesn't match our own.
+            val senderPkg = intent.getStringExtra("android.intent.extra.PACKAGE_NAME")
+            if (senderPkg != null && senderPkg != context.packageName) {
+                Log.w("TaptixWidget", "Rejected toggle from unknown sender: senderPkg")
+                return
+            }
             val prefs = PreferencesRepository(context)
             val currentSettings = prefs.getSettings()
             val newState = !currentSettings.masterControlEnabled

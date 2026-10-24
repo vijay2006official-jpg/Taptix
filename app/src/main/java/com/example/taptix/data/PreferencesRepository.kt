@@ -1,7 +1,8 @@
-package com.example.taptix.data
+﻿package com.example.taptix.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.taptix.model.AppProfile
 import com.example.taptix.model.OperatingMode
 import com.example.taptix.model.PlatformPreset
 
@@ -320,5 +321,60 @@ class PreferencesRepository(context: Context) {
 
     fun saveSmartAcceptRules(rules: com.example.taptix.model.SmartAcceptRules) {
         prefs.edit().putString("key_smart_accept_rules_json", rules.toJson().toString()).apply()
+    }
+
+    // --- Per-App Profiles (v2.1) ---
+
+    fun getAppProfiles(): List<AppProfile> {
+        val json = prefs.getString("key_app_profiles_json", null) ?: return AppProfile.DEFAULTS
+        return try {
+            val arr = org.json.JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                AppProfile(
+                    packageName = obj.getString("packageName"),
+                    displayName = obj.getString("displayName"),
+                    enabled = obj.optBoolean("enabled", true),
+                    customKeywords = obj.optString("customKeywords", "").split(",").filter { it.isNotBlank() },
+                    negativeKeywords = obj.optString("negativeKeywords", "").split(",").filter { it.isNotBlank() },
+                    minFare = if (obj.has("minFare")) obj.getDouble("minFare") else null,
+                    maxPickupDistanceKm = if (obj.has("maxPickupDistanceKm")) obj.getDouble("maxPickupDistanceKm") else null,
+                    useGlobalZones = obj.optBoolean("useGlobalZones", true),
+                    cooldownMs = obj.optLong("cooldownMs", 1500L)
+                )
+            }
+        } catch (e: Exception) {
+            AppProfile.DEFAULTS
+        }
+    }
+
+    fun saveAppProfiles(profiles: List<AppProfile>) {
+        val arr = org.json.JSONArray()
+        profiles.forEach { p ->
+            val obj = org.json.JSONObject().apply {
+                put("packageName", p.packageName)
+                put("displayName", p.displayName)
+                put("enabled", p.enabled)
+                put("customKeywords", p.customKeywords.joinToString(","))
+                put("negativeKeywords", p.negativeKeywords.joinToString(","))
+                p.minFare?.let { put("minFare", it) }
+                p.maxPickupDistanceKm?.let { put("maxPickupDistanceKm", it) }
+                put("useGlobalZones", p.useGlobalZones)
+                put("cooldownMs", p.cooldownMs)
+            }
+            arr.put(obj)
+        }
+        prefs.edit().putString("key_app_profiles_json", arr.toString()).apply()
+    }
+
+    fun getAppProfile(packageName: String): AppProfile? {
+        return getAppProfiles().firstOrNull { it.packageName == packageName }
+    }
+
+    fun saveAppProfile(profile: AppProfile) {
+        val profiles = getAppProfiles().toMutableList()
+        val idx = profiles.indexOfFirst { it.packageName == profile.packageName }
+        if (idx >= 0) profiles[idx] = profile else profiles.add(profile)
+        saveAppProfiles(profiles)
     }
 }

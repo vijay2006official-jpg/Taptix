@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Taptix – ऑटो क्लिकर</string>
+    <string name="accessibility_service_name">Taptix ऑटो क्लिकर इंजन</string>
+    <string name="accessibility_service_description">ड्राइवरों को हैंड्स-फ्री तरीके से ट्रिप रिक्वेस्ट स्वीकार करने में सहायता करने के लिए ऑटोमेटेड स्क्रीन टच और जेस्चर क्षमताएं प्रदान करता है।</string>
+
+    <!-- Permissions -->
+    <string name="permission_accessibility_title">एक्सेसिबिलिटी सेवा</string>
+    <string name="permission_accessibility_desc">स्मार्ट एक्सेप्ट के लिए टैप सिमुलेट करने और स्क्रीन टेक्स्ट का विश्लेषण करने के लिए आवश्यक।</string>
+    <string name="permission_overlay_title">अन्य ऐप्स पर प्रदर्शित करें</string>
+    <string name="permission_overlay_desc">राइड-हेलिंग ऐप्स पर फ्लोटिंग ड्राइवर कंट्रोल टूलबार प्रदर्शित करने के लिए आवश्यक।</string>
+    <string name="grant_permission">अनुमति दें</string>
+    <string name="permission_granted">सक्रिय &amp; तैयार</string>
+    <string name="permission_missing">अनुमति आवश्यक</string>
+
+    <!-- Overlay &amp; Service Controls -->
+    <string name="start_floating_control">फ्लोटिंग टूलबार शुरू करें</string>
+    <string name="stop_floating_control">फ्लोटिंग टूलबार बंद करें</string>
+    <string name="emergency_stop">आपातकालीन रोक</string>
+    <string name="service_running_notification">Taptix ड्राइवर सहायक सक्रिय</string>
+    <string name="notification_channel_name">Taptix ड्राइवर सेवा</string>
+    <string name="notification_channel_desc">फ्लोटिंग ड्राइवर टूलबार के लिए सक्रिय स्थिति और त्वरित नियंत्रण दिखाता है।</string>
+
+    <!-- Operating Modes -->
+    <string name="mode_single_target">सिंगल टारगेट</string>
+    <string name="mode_multi_target">मल्टी टारगेट</string>
+    <string name="mode_smart_accept">स्मार्ट एक्सेप्ट (OCR)</string>
+
+    <!-- Presets -->
+    <string name="preset_uber">Uber ड्राइवर</string>
+    <string name="preset_ola">Ola ड्राइवर</string>
+    <string name="preset_rapido">Rapido कैप्टन</string>
+    <string name="preset_lyft">Lyft ड्राइवर</string>
+    <string name="preset_custom">कस्टम ऐप</string>
+
+    <!-- Audio Announcements -->
+    <string name="tts_service_started">Taptix ऑटो क्लिकर शुरू हुआ</string>
+    <string name="tts_ride_accepted">सवारी अनुरोध स्वीकार किया गया!</string>
+    <string name="tts_service_paused">ऑटो क्लिकर रुका हुआ है</string>
+    <string name="tts_emergency_stop">आपातकालीन रोक सक्रिय। सभी क्लिक बंद।</string>
+    <string name="tts_motion_lock">वाहन की गति का पता चला। सुरक्षा लॉक सक्रिय।</string>
+</resources>
