@@ -1,6 +1,7 @@
 package com.example.taptix.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,13 +25,19 @@ data class DiagnosticItem(
 @Composable
 fun SelfCheckCard(
     diagnostics: List<DiagnosticItem>,
-    onOpenBatteryGuide: () -> Unit
+    onOpenBatteryGuide: () -> Unit,
+    onCardClick: (() -> Unit)? = null
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val allPassed = diagnostics.all { it.isGranted }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onCardClick != null) Modifier.clickable { onCardClick() }
+                else Modifier
+            ),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (allPassed) Color(0xFF0F1E19) else Color(0xFF1E1E28)

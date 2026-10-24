@@ -99,6 +99,12 @@ class OverlayService : Service() {
         prefsRepo = PreferencesRepository(this)
         ttsManager = TtsManager(this)
 
+        if (!prefsRepo.getSettings().masterControlEnabled) {
+            android.util.Log.d(TAG, "Master control disabled, stopping OverlayService immediately")
+            stopSelf()
+            return
+        }
+
         startForegroundServiceNotification()
         setupFloatingToolbar()
         setupVoiceControl()
