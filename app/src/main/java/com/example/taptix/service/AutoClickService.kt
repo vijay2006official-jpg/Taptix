@@ -633,6 +633,12 @@ class AutoClickService : AccessibilityService() {
 
     ) {
 
+        // Fix D: Never scan while the foreground window belongs to our own app
+
+        val foregroundPkg = event?.packageName?.toString() ?: ""
+
+        if (foregroundPkg.isNotEmpty() && foregroundPkg == packageName) return
+
         val settings = prefsRepo.getSettings()
 
         // Master Control gate — if master is OFF, do nothing at all
@@ -737,9 +743,9 @@ class AutoClickService : AccessibilityService() {
 
             val isKnownTarget = targets.any { it.equals(appPkg.lowercase(), ignoreCase = true) }
 
-            val isDemoScreen = appPkg == packageName // Allow in-app demo screen testing only
+            // isDemoScreen removed — own package must NOT trigger auto-accept
 
-            if (!isKnownTarget && !isDemoScreen && !settings.ultraModeEnabled) {
+            if (!isKnownTarget && !settings.ultraModeEnabled) {
 
                 // Not a supported ride partner app, ignore
 
@@ -929,6 +935,10 @@ class AutoClickService : AccessibilityService() {
 
             notifyRideAccepted()
 
+            // Force 30-second pause after a successful accept to prevent rapid re-triggering
+
+            lastAcceptTime = System.currentTimeMillis() + 28500L
+
             return true
 
         } else {
@@ -1059,7 +1069,7 @@ class AutoClickService : AccessibilityService() {
 
             // Reset flag after cooldown so it can speak again for next booking
 
-            mainHandler.postDelayed({ hasSoundPlayed = false }, COOLDOWN_MS + 2000L)
+            mainHandler.postDelayed({ hasSoundPlayed = false }, 30000L) // 30s silence after each TTS
 
         }
 
