@@ -20,22 +20,24 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.taptix.data.PreferencesRepository
-import com.example.taptix.model.AreaGroup
 import com.example.taptix.model.MapZone
 import com.example.taptix.ui.theme.TaptixTheme
 import java.util.UUID
@@ -50,11 +52,10 @@ class MapZoneActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         prefsRepo = PreferencesRepository(this)
 
-        // Read local offline Leaflet bundle from assets
         try {
             leafletCss = assets.open("leaflet/leaflet.css").bufferedReader().use { it.readText() }
             leafletJs = assets.open("leaflet/leaflet.js").bufferedReader().use { it.readText() }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             leafletCss = ""
             leafletJs = ""
         }
@@ -73,7 +74,6 @@ class MapZoneActivity : ComponentActivity() {
 }
 
 @SuppressLint("SetJavaScriptEnabled")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapZoneScreen(
     prefsRepo: PreferencesRepository,
@@ -82,48 +82,41 @@ fun MapZoneScreen(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
-    var zones by remember { mutableStateOf(prefsRepo.getMapZones()) }
-    var areaGroups by remember { mutableStateOf(prefsRepo.getAreaGroups()) }
-    var selectedTab by remember { mutableStateOf(0) } // 0: Map Editor, 1: Saved Zones, 2: Area Lists
+    val zones = remember { prefsRepo.getMapZones() }
 
-    // Selected zone being edited
-    var editingZoneId by remember { mutableStateOf<String?>(null) }
-    var zoneName by remember { mutableStateOf("Work Zone") }
     var pickedLat by remember { mutableStateOf(13.0827) }
     var pickedLng by remember { mutableStateOf(80.2707) }
     var radiusKm by remember { mutableStateOf(2.0f) }
+    var pickedAddress by remember { mutableStateOf("Chinnaiyan Colony, Perambur, Chennai") }
+    var searchQuery by remember { mutableStateOf("") }
+    var currentSpeedKmh by remember { mutableStateOf(43) }
+
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    var statusText by remember { mutableStateOf("📍 Tap map to set zone center") }
-    // Permission launcher for Location
+
+    // Init from existing first zone or current GPS
     val locationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { perms ->
         val granted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
-            statusText = "📍 Fetching GPS location..."
             centerOnCurrentLocation(context) { loc ->
                 pickedLat = loc.latitude
                 pickedLng = loc.longitude
-                val latStr = String.format("%.4f", loc.latitude)
-                val lngStr = String.format("%.4f", loc.longitude)
-                statusText = "📍 Current GPS: $latStr, $lngStr"
+                if (loc.hasSpeed()) {
+                    currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
+                }
                 webViewRef?.evaluateJavascript(
                     "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
                     null
                 )
             }
-        } else {
-            Toast.makeText(context, "Location permission is required for GPS centering", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Init from existing first zone or current GPS
     LaunchedEffect(Unit) {
         val first = zones.firstOrNull()
         if (first != null) {
-            editingZoneId = first.id
-            zoneName = first.name
             pickedLat = first.lat
             pickedLng = first.lng
             radiusKm = first.radiusKm.toFloat()
@@ -131,13 +124,12 @@ fun MapZoneScreen(
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (fine || coarse) {
-                statusText = "📍 Fetching GPS location..."
                 centerOnCurrentLocation(context) { loc ->
                     pickedLat = loc.latitude
                     pickedLng = loc.longitude
-                    val latStr = String.format("%.4f", loc.latitude)
-                    val lngStr = String.format("%.4f", loc.longitude)
-                    statusText = "📍 Current GPS: $latStr, $lngStr"
+                    if (loc.hasSpeed()) {
+                        currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
+                    }
                     webViewRef?.evaluateJavascript(
                         "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
                         null
@@ -149,461 +141,282 @@ fun MapZoneScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            Column(Modifier.background(Color(0xFF0F172A))) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            "🗺️ WORK ZONES & AREAS",
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White,
-                            fontSize = 17.sp
-                        )
-                        Text(
-                            "Multi-zone geofencing for automatic accept",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 12.sp
-                        )
+    Box(Modifier.fillMaxSize().background(Color(0xFFE5E7EB))) {
+        // ── 1. Fullscreen Map View
+        AndroidView(
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    with(settings) {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        loadWithOverviewMode = true
+                        useWideViewPort = true
+                        builtInZoomControls = true
+                        displayZoomControls = false
+                        allowFileAccess = false
+                        cacheMode = WebSettings.LOAD_DEFAULT
                     }
-                    IconButton(onClick = onClose) {
-                        Text("✕", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    webChromeClient = WebChromeClient()
+                    webViewClient = WebViewClient()
+
+                    addJavascriptInterface(object : Any() {
+                        @JavascriptInterface
+                        fun onLocationPicked(lat: Double, lng: Double, address: String?) {
+                            if (lat in -90.0..90.0 && lng in -180.0..180.0) {
+                                pickedLat = lat
+                                pickedLng = lng
+                                if (!address.isNullOrBlank()) {
+                                    pickedAddress = address
+                                }
+                            }
+                        }
+                    }, "Android")
+
+                    loadDataWithBaseURL(
+                        "https://tile.openstreetmap.org/",
+                        buildMapHtml(
+                            centerLat = pickedLat,
+                            centerLng = pickedLng,
+                            markerLat = pickedLat,
+                            markerLng = pickedLng,
+                            radiusKm = radiusKm.toDouble(),
+                            cssContent = leafletCss,
+                            jsContent = leafletJs
+                        ),
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
+                    webViewRef = this
+                }
+            },
+            update = { wv -> webViewRef = wv },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // ── 2. Top Bar (Back Button + Search Area Pill)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Circular Back Button
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .shadow(4.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .clickable { onClose() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("←", color = Color(0xFF0F172A), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            }
+
+            // "Search area..." Pill
+            Row(
+                Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .shadow(4.dp, RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (searchQuery.isEmpty()) {
+                        Text("Search area...", color = Color(0xFF94A3B8), fontSize = 14.sp)
                     }
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color(0xFF0F172A), fontSize = 14.sp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color(0xFF1E293B),
-                    contentColor = Color(0xFF38BDF8)
+                IconButton(
+                    onClick = {
+                        val q = searchQuery.trim()
+                        if (q.isNotEmpty()) {
+                            val clean = q.replace("'", "\\'")
+                            webViewRef?.evaluateJavascript("searchAddress('$clean');", null)
+                        }
+                    },
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Map Editor", fontWeight = FontWeight.Bold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Zones (${zones.size})", fontWeight = FontWeight.Bold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        text = { Text("Area Lists (${areaGroups.size})", fontWeight = FontWeight.Bold) }
-                    )
+                    Text("🔍", fontSize = 16.sp)
                 }
             }
-        },
-        containerColor = Color(0xFF0B0F19)
-    ) { padding ->
+        }
+
+        // ── 3. Speedometer Badge (Top-Left)
         Box(
             Modifier
-                .fillMaxSize()
-                .padding(padding)
+                .padding(start = 18.dp, top = 80.dp)
+                .size(62.dp)
+                .shadow(6.dp, CircleShape)
+                .clip(CircleShape)
+                .background(Color(0xFFFBBF24)),
+            contentAlignment = Alignment.Center
         ) {
-            when (selectedTab) {
-                0 -> {
-                    // TAB 0: Map Editor
-                    Column(Modifier.fillMaxSize()) {
-                        // Status & GPS Centering Bar
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFF1E293B))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                statusText,
-                                color = Color(0xFF38BDF8),
-                                fontSize = 12.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = {
-                                    val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                                    val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                                    if (fine || coarse) {
-                                        centerOnCurrentLocation(context) { loc ->
-                                            pickedLat = loc.latitude
-                                            pickedLng = loc.longitude
-                                            statusText = "📍 Centered at GPS location"
-                                            webViewRef?.evaluateJavascript(
-                                                "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
-                                                null
-                                            )
-                                        }
-                                    } else {
-                                        locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                                    }
-                                },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("📍 My GPS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "$currentSpeedKmh",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp,
+                    color = Color.Black,
+                    lineHeight = 20.sp
+                )
+                Text(
+                    "km/h",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    color = Color.Black,
+                    lineHeight = 10.sp
+                )
+            }
+        }
+
+        // ── 4. Floating GPS Target Button (Bottom-Right, above bottom card)
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = 225.dp)
+                .size(48.dp)
+                .shadow(6.dp, CircleShape)
+                .clip(CircleShape)
+                .background(Color.White)
+                .clickable {
+                    val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    if (fine || coarse) {
+                        centerOnCurrentLocation(context) { loc ->
+                            pickedLat = loc.latitude
+                            pickedLng = loc.longitude
+                            if (loc.hasSpeed()) {
+                                currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
                             }
-                        }
-
-                        // Map View
-                        Box(Modifier.weight(1f)) {
-                            AndroidView(
-                                factory = { ctx ->
-                                    WebView(ctx).apply {
-                                        with(settings) {
-                                            javaScriptEnabled = true
-                                            domStorageEnabled = true
-                                            loadWithOverviewMode = true
-                                            useWideViewPort = true
-                                            builtInZoomControls = true
-                                            displayZoomControls = false
-                                            // Security hardening: restrict dangerous file access
-                                            allowFileAccess = false
-                                            @Suppress("DEPRECATION")
-                                            allowFileAccessFromFileURLs = false
-                                            @Suppress("DEPRECATION")
-                                            allowUniversalAccessFromFileURLs = false
-                                            cacheMode = WebSettings.LOAD_DEFAULT
-                                        }
-                                        webChromeClient = WebChromeClient()
-                                        webViewClient = WebViewClient()
-
-                                        addJavascriptInterface(object : Any() {
-                                            @JavascriptInterface
-                                            fun onLocationPicked(lat: Double, lng: Double) {
-                                                // Validate JS input
-                                                if (lat in -90.0..90.0 && lng in -180.0..180.0) {
-                                                    pickedLat = lat
-                                                    pickedLng = lng
-                                                    statusText = "Selected: ${String.format("%.4f", lat)}, ${String.format("%.4f", lng)}"
-                                                }
-                                            }
-                                        }, "Android")
-
-                                        loadDataWithBaseURL(
-                                            "https://tile.openstreetmap.org/",
-                                            buildMapHtml(
-                                                centerLat = pickedLat,
-                                                centerLng = pickedLng,
-                                                markerLat = pickedLat,
-                                                markerLng = pickedLng,
-                                                radiusKm = radiusKm.toDouble(),
-                                                cssContent = leafletCss,
-                                                jsContent = leafletJs
-                                            ),
-                                            "text/html",
-                                            "UTF-8",
-                                            null
-                                        )
-                                        webViewRef = this
-                                    }
-                                },
-                                update = { wv -> webViewRef = wv },
-                                modifier = Modifier.fillMaxSize()
+                            webViewRef?.evaluateJavascript(
+                                "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
+                                null
                             )
                         }
-
-                        // Controls Drawer (Zone Name, Radius Slider, Save)
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFF1E293B))
-                                .padding(14.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = zoneName,
-                                onValueChange = { zoneName = it },
-                                label = { Text("Zone Name") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF38BDF8),
-                                    unfocusedBorderColor = Color(0xFF475569),
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White
-                                )
-                            )
-
-                            Spacer(Modifier.height(8.dp))
-
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Radius:", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                Text("${String.format("%.1f", radiusKm)} km", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
-                            }
-
-                            Slider(
-                                value = radiusKm,
-                                onValueChange = { v ->
-                                    radiusKm = v
-                                    webViewRef?.evaluateJavascript("updateRadius(${(v * 1000).toInt()});", null)
-                                },
-                                valueRange = 0.5f..20f,
-                                steps = 38,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color(0xFF38BDF8),
-                                    activeTrackColor = Color(0xFF38BDF8)
-                                )
-                            )
-
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        editingZoneId = null
-                                        zoneName = "Zone ${zones.size + 1}"
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("New Zone", color = Color.White)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        val currentId = editingZoneId ?: UUID.randomUUID().toString()
-                                        val newZone = MapZone(
-                                            id = currentId,
-                                            name = zoneName.ifBlank { "Zone ${zones.size + 1}" },
-                                            lat = pickedLat,
-                                            lng = pickedLng,
-                                            radiusKm = radiusKm.toDouble(),
-                                            isEnabled = true
-                                        )
-                                        prefsRepo.addOrUpdateMapZone(newZone)
-                                        prefsRepo.saveMapZoneEnabled(true)
-                                        zones = prefsRepo.getMapZones()
-                                        editingZoneId = newZone.id
-                                        Toast.makeText(context, "✅ Zone '${newZone.name}' saved!", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.weight(1.5f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("💾 Save Zone", color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
+                    } else {
+                        locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("🎯", fontSize = 20.sp)
+        }
+
+        // ── 5. Bottom Sheet: SET WORK BOUNDARY
+        Card(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Text(
+                    "SET WORK BOUNDARY",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 18.sp,
+                    color = Color(0xFF0F172A),
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Long press on map to drop a pin. The bot will only accept orders within this circle.",
+                    color = Color(0xFF64748B),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                // Radius Slider Row
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Radius:",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color(0xFF0F172A)
+                    )
+
+                    Slider(
+                        value = radiusKm,
+                        onValueChange = { v ->
+                            radiusKm = v
+                            webViewRef?.evaluateJavascript("updateRadius(${(v * 1000).toInt()});", null)
+                        },
+                        valueRange = 0.5f..20f,
+                        steps = 38,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF0066FF),
+                            activeTrackColor = Color(0xFF0066FF),
+                            inactiveTrackColor = Color(0xFFE2E8F0)
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp)
+                    )
+
+                    Text(
+                        "${radiusKm.toInt()} km",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 15.sp,
+                        color = Color(0xFF0066FF)
+                    )
                 }
 
-                1 -> {
-                    // TAB 1: Saved Zones List
-                    LazyColumn(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        item {
-                            Text(
-                                "SAVED ZONES (${zones.size})",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                Spacer(Modifier.height(16.dp))
 
-                        if (zones.isEmpty()) {
-                            item {
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("No zones saved yet. Tap 'Map Editor' to create one.", color = Color.Gray, fontSize = 13.sp)
-                                }
-                            }
-                        }
-
-                        items(zones, key = { it.id }) { zone ->
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(zone.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                        Text(
-                                            "${String.format("%.4f", zone.lat)}, ${String.format("%.4f", zone.lng)} — ${zone.radiusKm} km radius",
-                                            color = Color(0xFF94A3B8),
-                                            fontSize = 12.sp
-                                        )
-                                    }
-
-                                    Switch(
-                                        checked = zone.isEnabled,
-                                        onCheckedChange = { chk ->
-                                            val updated = zone.copy(isEnabled = chk)
-                                            prefsRepo.addOrUpdateMapZone(updated)
-                                            zones = prefsRepo.getMapZones()
-                                        }
-                                    )
-
-                                    Spacer(Modifier.width(8.dp))
-
-                                    IconButton(onClick = {
-                                        editingZoneId = zone.id
-                                        zoneName = zone.name
-                                        pickedLat = zone.lat
-                                        pickedLng = zone.lng
-                                        radiusKm = zone.radiusKm.toFloat()
-                                        selectedTab = 0
-                                    }) {
-                                        Text("✏️")
-                                    }
-
-                                    IconButton(onClick = {
-                                        prefsRepo.deleteMapZone(zone.id)
-                                        zones = prefsRepo.getMapZones()
-                                        Toast.makeText(context, "Deleted zone", Toast.LENGTH_SHORT).show()
-                                    }) {
-                                        Text("🗑️")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                2 -> {
-                    // TAB 2: Custom Area Lists
-                    var newGroupName by remember { mutableStateOf("") }
-
-                    LazyColumn(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        item {
-                            Text(
-                                "CUSTOM AREA LISTS",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "Group zones into duty profiles (e.g., 'Morning Peak', 'Airport Zone')",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        item {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    OutlinedTextField(
-                                        value = newGroupName,
-                                        onValueChange = { newGroupName = it },
-                                        placeholder = { Text("List Name (e.g. Airport Area)") },
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White
-                                        )
-                                    )
-                                    Button(
-                                        onClick = {
-                                            if (newGroupName.isNotBlank()) {
-                                                val allZoneIds = zones.map { it.id }
-                                                val group = AreaGroup(
-                                                    name = newGroupName.trim(),
-                                                    zoneIds = allZoneIds,
-                                                    isSelected = areaGroups.isEmpty()
-                                                )
-                                                val updated = areaGroups + group
-                                                prefsRepo.saveAreaGroups(updated)
-                                                areaGroups = prefsRepo.getAreaGroups()
-                                                newGroupName = ""
-                                                Toast.makeText(context, "Created area list", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("+ Create")
-                                    }
-                                }
-                            }
-                        }
-
-                        items(areaGroups, key = { it.id }) { group ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (group.isSelected) Color(0xFF1E3A8A) else Color(0xFF1E293B)
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        val newSel = if (group.isSelected) null else group.id
-                                        prefsRepo.selectAreaGroup(newSel)
-                                        areaGroups = prefsRepo.getAreaGroups()
-                                    }
-                            ) {
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = group.isSelected,
-                                        onClick = {
-                                            val newSel = if (group.isSelected) null else group.id
-                                            prefsRepo.selectAreaGroup(newSel)
-                                            areaGroups = prefsRepo.getAreaGroups()
-                                        }
-                                    )
-                                    Column(Modifier.weight(1f)) {
-                                        Text(group.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                        Text(
-                                            if (group.isSelected) "ACTIVE LIST (${group.zoneIds.size} zones included)" else "${group.zoneIds.size} zones included",
-                                            color = if (group.isSelected) Color(0xFF38BDF8) else Color(0xFF94A3B8),
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                    IconButton(onClick = {
-                                        val updated = areaGroups.filterNot { it.id == group.id }
-                                        prefsRepo.saveAreaGroups(updated)
-                                        areaGroups = prefsRepo.getAreaGroups()
-                                    }) {
-                                        Text("🗑️")
-                                    }
-                                }
-                            }
-                        }
-                    }
+                // Save Boundary Button
+                Button(
+                    onClick = {
+                        val newZone = MapZone(
+                            id = UUID.randomUUID().toString(),
+                            name = "Work Zone",
+                            lat = pickedLat,
+                            lng = pickedLng,
+                            radiusKm = radiusKm.toDouble(),
+                            isEnabled = true
+                        )
+                        prefsRepo.addOrUpdateMapZone(newZone)
+                        prefsRepo.saveMapZone(pickedLat, pickedLng, radiusKm.toDouble())
+                        prefsRepo.saveMapZoneEnabled(true)
+                        Toast.makeText(context, "✅ Work boundary saved: ${radiusKm.toInt()} km circle", Toast.LENGTH_SHORT).show()
+                        onClose()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0066FF))
+                ) {
+                    Text(
+                        "SAVE BOUNDARY",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 15.sp,
+                        color = Color.White,
+                        letterSpacing = 1.sp
+                    )
                 }
             }
         }
@@ -627,7 +440,6 @@ private fun centerOnCurrentLocation(context: Context, onLocationFound: (Location
             return
         }
 
-        // Active GPS listener fallback when cached location is null
         val listener = object : android.location.LocationListener {
             override fun onLocationChanged(loc: Location) {
                 try { lm.removeUpdates(this) } catch (_: Exception) {}
@@ -646,9 +458,7 @@ private fun centerOnCurrentLocation(context: Context, onLocationFound: (Location
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             try { lm.removeUpdates(listener) } catch (_: Exception) {}
         }, 8000L)
-    } catch (e: SecurityException) {
-        // Location permission handled by caller
-    }
+    } catch (_: SecurityException) {}
 }
 
 private fun buildMapHtml(
@@ -682,15 +492,22 @@ $cssBlock
 $jsBlock
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#0B0F19; font-family:sans-serif; }
+  body { background:#F1F5F9; font-family:sans-serif; }
   #map { width:100vw; height:100vh; }
-  .leaflet-container { background: #1E293B; }
+  .leaflet-popup-content-wrapper {
+    background: #FFFFFF;
+    color: #0F172A;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <script>
-var map = L.map('map', {zoomControl:true, attributionControl:false})
+var map = L.map('map', {zoomControl:false, attributionControl:false})
            .setView([$centerLat, $centerLng], 13);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -701,17 +518,40 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 var marker = null, circle = null;
 var radiusM = $radiusM;
 
+function fetchAddressAndPopup(lat, lng) {
+  var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng;
+  fetch(url, { headers: { 'Accept': 'application/json' } })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var addr = data && data.display_name ? data.display_name : (lat.toFixed(4) + ', ' + lng.toFixed(4));
+      if (marker) {
+        marker.bindPopup('<div style="font-size:12px; font-weight:600; line-height:16px;">' + addr + '</div>').openPopup();
+      }
+      if (typeof Android !== 'undefined' && Android.onLocationPicked) {
+        Android.onLocationPicked(lat, lng, addr);
+      }
+    })
+    .catch(function() {
+      if (typeof Android !== 'undefined' && Android.onLocationPicked) {
+        Android.onLocationPicked(lat, lng, '');
+      }
+    });
+}
+
 function placeMarker(lat, lng) {
   if (marker) map.removeLayer(marker);
   if (circle) map.removeLayer(circle);
-  marker = L.marker([lat, lng]).addTo(map).bindPopup('📍 Zone Center').openPopup();
+
+  marker = L.marker([lat, lng]).addTo(map);
   circle = L.circle([lat, lng], {
     radius: radiusM,
-    color: '#38BDF8', fillColor: '#38BDF8', fillOpacity: 0.22, weight: 2
+    color: '#0066FF',
+    fillColor: '#0066FF',
+    fillOpacity: 0.18,
+    weight: 2
   }).addTo(map);
-  if (typeof Android !== 'undefined' && Android.onLocationPicked) {
-    Android.onLocationPicked(lat, lng);
-  }
+
+  fetchAddressAndPopup(lat, lng);
 }
 
 placeMarker($markerLat, $markerLng);
@@ -723,12 +563,31 @@ function updateRadius(r) {
     map.removeLayer(circle);
     circle = L.circle([ll.lat, ll.lng], {
       radius: radiusM,
-      color: '#38BDF8', fillColor: '#38BDF8', fillOpacity: 0.22, weight: 2
+      color: '#0066FF',
+      fillColor: '#0066FF',
+      fillOpacity: 0.18,
+      weight: 2
     }).addTo(map);
   }
 }
 
+function searchAddress(query) {
+  var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query);
+  fetch(url, { headers: { 'Accept': 'application/json' } })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data && data.length > 0) {
+        var first = data[0];
+        var lat = parseFloat(first.lat);
+        var lon = parseFloat(first.lon);
+        map.setView([lat, lon], 14);
+        placeMarker(lat, lon);
+      }
+    });
+}
+
 map.on('click', function(e) { placeMarker(e.latlng.lat, e.latlng.lng); });
+map.on('contextmenu', function(e) { placeMarker(e.latlng.lat, e.latlng.lng); });
 </script>
 </body>
 </html>"""

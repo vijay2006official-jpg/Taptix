@@ -817,6 +817,22 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
             )
 
+            var isTargetAreasActive by remember { mutableStateOf(prefsRepo.isTargetAreasEnabled()) }
+
+            TargetAreasCard(
+                isOn = isTargetAreasActive,
+                onToggle = { on ->
+                    isTargetAreasActive = on
+                    prefsRepo.saveTargetAreasEnabled(on)
+                },
+                onOpenAreas = {
+                    val intent = Intent(context, MapZoneActivity::class.java).apply {
+                        putExtra("initial_tab", 2)
+                    }
+                    context.startActivity(intent)
+                }
+            )
+
             // ── 6. PLATFORM SELECTOR
 
             PlatformRow(appSettings.platformPreset) { preset ->
@@ -1010,29 +1026,34 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
             }
 
             // ── 12. LAUNCH FLOATING CONTROLS
-
             Button(
-
                 onClick = {
-
-                    if (!isAccessibilityOn || !isOverlayOn) {
-
-                        Toast.makeText(context, "Please grant required permissions first", Toast.LENGTH_SHORT).show()
-
+                    if (!Settings.canDrawOverlays(context)) {
+                        context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
+                        Toast.makeText(context, "Please grant 'Display over other apps' permission", Toast.LENGTH_SHORT).show()
                         return@Button
-
+                    }
+                    if (!isAccessibilityOn) {
+                        showAccessibilityDisclosure = true
+                        return@Button
                     }
 
-                    val i = Intent(context, OverlayService::class.java)
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-
-                        context.startForegroundService(i) else context.startService(i)
-
+                    // 1. Save Master Control enabled FIRST in preferences
                     prefsRepo.saveMasterControl(true)
-
                     appSettings = prefsRepo.getSettings()
 
+                    // 2. Start OverlayService
+                    val i = Intent(context, OverlayService::class.java)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(i)
+                    } else {
+                        context.startService(i)
+                    }
+
+                    // 3. If service is already active, restore from bubble / show toolbar
+                    OverlayService.instance?.expandFromBubble()
+
+                    Toast.makeText(context, "🚀 Floating controls launched!", Toast.LENGTH_SHORT).show()
                 },
 
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -1268,6 +1289,68 @@ fun UltraModeCard(isOn: Boolean, onToggle: (Boolean) -> Unit) {
 }
 
 // ─── MAP ZONE CARD ────────────────────────────────────────────────────────────
+
+
+// ─── TARGET AREAS CARD ────────────────────────────────────────────────────────
+
+@Composable
+fun TargetAreasCard(
+    isOn: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onOpenAreas: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isOn) Color(0xFF0A1828) else DarkCard),
+        border = if (isOn) androidx.compose.foundation.BorderStroke(1.5.dp, BrandCyan)
+        else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "🎯 TARGET AREAS",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isOn) BrandCyan else Color.White,
+                        fontSize = 16.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (isOn) "Target Areas filtering is ON" else "Target Areas filtering is OFF",
+                    color = if (isOn) BrandCyan.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.6f),
+                    fontSize = 13.sp
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Switch(
+                    checked = isOn,
+                    onCheckedChange = onToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor   = Color.White,
+                        checkedTrackColor   = BrandCyan,
+                        uncheckedThumbColor = Color(0xFF444455),
+                        uncheckedTrackColor = Color(0xFF1E2230)
+                    )
+                )
+                Box(
+                    Modifier.size(42.dp).clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1E293B))
+                        .clickable { onOpenAreas() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("🎯", fontSize = 18.sp)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 

@@ -2,7 +2,8 @@ package com.example.taptix.model
 
 /**
  * Driver Platform Preset configurations.
- * Contains targeted keyword matching rules and gesture behaviors.
+ * Strictly contains actionable accept keywords.
+ * Excludes generic categories like "AUTO", "BIKE", "GO" to eliminate false triggers.
  */
 enum class PlatformPreset(
     val id: String,
@@ -14,14 +15,10 @@ enum class PlatformPreset(
         id = "universal",
         title = "Universal (All Duties)",
         keywords = listOf(
-            // Ride & Order Accept
             "ACCEPT", "TAP TO ACCEPT", "ACCEPT TRIP", "ACCEPT RIDE", "ACCEPT ORDER",
             "ACCEPT BOOKING", "ACCEPT DUTY", "CONFIRM", "CONFIRM RIDE", "SWIPE TO ACCEPT",
-            "MATCH", "BOOKING", "RIDE REQUEST", "NEW RIDE", "CAPTAIN ACCEPT",
-            "GO TO PICKUP", "TAKE RIDE", "OFFER", "GO", "START DUTY", "TAKE DUTY",
-            // Rentals, Outstation & Delivery Duties
-            "ACCEPT DUTY", "NEW DUTY", "OUTSTATION", "RENTAL", "HOURLY", "PACKAGE", "PARCEL",
-            "DELIVERY", "ACCEPT DELIVERY", "ACCEPT PARCEL", "ORDER REQUEST"
+            "MATCH", "CAPTAIN ACCEPT", "TAKE RIDE", "START DUTY", "TAKE DUTY",
+            "ACCEPT DELIVERY", "ACCEPT PARCEL", "ORDER REQUEST", "RIDE REQUEST", "NEW RIDE"
         ),
         requiresSwipe = false
     ),
@@ -30,7 +27,6 @@ enum class PlatformPreset(
         title = "Uber Driver",
         keywords = listOf(
             "ACCEPT", "TAP TO ACCEPT", "RIDE REQUEST", "ACCEPT TRIP", "MATCH", "ACCEPT OFFER",
-            "GO", "UBER GO", "UBER AUTO", "UBER MOTO", "PACKAGE", "CONNECT", "RESERVE",
             "ACCEPT DELIVERY", "DELIVERY REQUEST"
         ),
         requiresSwipe = false
@@ -40,8 +36,7 @@ enum class PlatformPreset(
         title = "Ola Partner",
         keywords = listOf(
             "ACCEPT", "CONFIRM RIDE", "NEW RIDE", "RIDE REQUEST", "ACCEPT RIDE",
-            "BOOKING", "DUTY", "ACCEPT DUTY", "OUTSTATION", "RENTALS", "RENTAL",
-            "MINI", "PRIME", "AUTO", "BIKE", "TAKE DUTY", "START TRIP"
+            "ACCEPT DUTY", "TAKE DUTY", "START TRIP"
         ),
         requiresSwipe = false
     ),
@@ -50,21 +45,20 @@ enum class PlatformPreset(
         title = "Rapido Captain",
         keywords = listOf(
             "ACCEPT ORDER", "ACCEPT RIDE", "ACCEPT", "CAPTAIN ACCEPT", "SWIPE TO ACCEPT",
-            "GO TO PICKUP", "PARCEL", "FOOD", "AUTO", "BIKE", "DELIVERY", "RAPIDO AUTO",
-            "RAPIDO BIKE", "NEW ORDER", "TAKE ORDER"
+            "NEW ORDER", "TAKE ORDER", "CONFIRM ORDER"
         ),
         requiresSwipe = false
     ),
     INDRIVER(
         id = "indriver",
         title = "inDrive",
-        keywords = listOf("ACCEPT", "OFFER", "MAKE OFFER", "ACCEPT OFFER", "RAISE FARE", "CITY", "COURIER", "FREIGHT"),
+        keywords = listOf("ACCEPT", "OFFER", "MAKE OFFER", "ACCEPT OFFER", "RAISE FARE"),
         requiresSwipe = false
     ),
     PORTER(
         id = "porter",
         title = "Porter Partner",
-        keywords = listOf("ACCEPT ORDER", "ACCEPT TRIP", "ACCEPT", "TAKE TRIP", "LOAD", "UNLOAD", "NEW TRIP"),
+        keywords = listOf("ACCEPT ORDER", "ACCEPT TRIP", "ACCEPT", "TAKE TRIP", "NEW TRIP"),
         requiresSwipe = false
     ),
     NAMMAYATRI(
@@ -76,7 +70,7 @@ enum class PlatformPreset(
     CUSTOM(
         id = "custom",
         title = "Custom App",
-        keywords = listOf("ACCEPT", "CONFIRM", "YES", "OK", "TAKE", "GO"),
+        keywords = listOf("ACCEPT", "CONFIRM", "YES", "OK", "TAKE"),
         requiresSwipe = false
     );
 

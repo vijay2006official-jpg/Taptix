@@ -167,6 +167,7 @@ class PreferencesRepository(context: Context) {
         // v1.7 new keys
         private const val KEY_MASTER_CONTROL = "key_master_control"
         private const val KEY_ULTRA_MODE = "key_ultra_mode"
+        private const val KEY_TARGET_AREAS_ENABLED = "key_target_areas_enabled"
         private const val KEY_MAP_ZONE_ENABLED = "key_map_zone_enabled"
         private const val KEY_MAP_ZONE_LAT = "key_map_zone_lat"
         private const val KEY_MAP_ZONE_LNG = "key_map_zone_lng"
@@ -376,5 +377,12 @@ class PreferencesRepository(context: Context) {
         val idx = profiles.indexOfFirst { it.packageName == profile.packageName }
         if (idx >= 0) profiles[idx] = profile else profiles.add(profile)
         saveAppProfiles(profiles)
+    }
+    fun isTargetAreasEnabled(): Boolean {
+        return prefs.getBoolean(KEY_TARGET_AREAS_ENABLED, false)
+    }
+
+    fun saveTargetAreasEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TARGET_AREAS_ENABLED, enabled).apply()
     }
 }

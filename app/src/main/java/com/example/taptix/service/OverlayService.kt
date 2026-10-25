@@ -171,6 +171,9 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (prefsRepo.getSettings().masterControlEnabled) {
+            expandFromBubble()
+        }
         when (intent?.action) {
             ACTION_STOP_SERVICE -> {
                 stopSelf()
@@ -514,6 +517,7 @@ class OverlayService : Service() {
         }
         tripActionRow.addView(tripActionBtn, LinearLayout.LayoutParams(0, 75, 1f))
         tripCard.addView(tripActionRow)
+        tripCard.visibility = View.GONE
 
         container.addView(tripCard)
 
@@ -533,7 +537,7 @@ class OverlayService : Service() {
     /**
      * Restores full toolbar from minimized floating bubble.
      */
-    private fun expandFromBubble() {
+    fun expandFromBubble() {
         isMinimized = false
         bubbleView?.visibility = View.GONE
         toolbarView?.visibility = View.VISIBLE
@@ -698,9 +702,7 @@ class OverlayService : Service() {
                 tripActionBtn?.text = "⚡ ACCEPT OFFER (${info.fare})"
                 tripActionBtn?.background = createRoundBackground("#FF9800", 14f)
                 tripActionBtn?.setTextColor(Color.BLACK)
-                if (prefsRepo.getSettings().ttsFeedbackEnabled) {
-                    ttsManager?.speak("New trip offer received! ${info.fare} for ${info.distance}.")
-                }
+                
             }
             TripPhase.EN_ROUTE_PICKUP -> {
                 tripActionBtn?.text = "📍 ARRIVED AT PICKUP"
@@ -738,11 +740,11 @@ class OverlayService : Service() {
                 updateTripStatus(currentTripInfo.copy(phase = TripPhase.EN_ROUTE_PICKUP))
             }
             TripPhase.EN_ROUTE_PICKUP -> {
-                ttsManager?.speak("Arrived at pickup location.")
+                // Mock announcement removed
                 updateTripStatus(currentTripInfo.copy(phase = TripPhase.TRIP_IN_PROGRESS))
             }
             TripPhase.TRIP_IN_PROGRESS -> {
-                ttsManager?.speak("Trip completed! Earnings updated.")
+                // Mock announcement removed
                 updateTripStatus(currentTripInfo.copy(phase = TripPhase.COMPLETED))
             }
             else -> {
