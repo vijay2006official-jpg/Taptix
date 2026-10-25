@@ -125,12 +125,14 @@ class OverlayService : Service() {
         // Start Auto-Dim Idle Timer if enabled
         resetAutoDimTimer()
 
-        // Automatically activate Auto-Accept engine — delay 800ms for AutoClickService to bind
+        // Automatically activate Auto-Accept engine ONLY if Master Control is active
         Handler(Looper.getMainLooper()).postDelayed({
-            startClickingSequence()
+            if (prefsRepo.getSettings().masterControlEnabled) {
+                startClickingSequence()
+            }
             // Retry once more after 2s in case accessibility service was slow to connect
             Handler(Looper.getMainLooper()).postDelayed({
-                if (!isPlaying && AutoClickService.instance != null) {
+                if (prefsRepo.getSettings().masterControlEnabled && !isPlaying && AutoClickService.instance != null) {
                     startClickingSequence()
                 }
             }, 2000L)

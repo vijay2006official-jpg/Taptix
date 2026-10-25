@@ -94,6 +94,29 @@ fun MapZoneScreen(
     var radiusKm by remember { mutableStateOf(2.0f) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var statusText by remember { mutableStateOf("📍 Tap map to set zone center") }
+    // Permission launcher for Location
+    val locationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        val granted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            statusText = "📍 Fetching GPS location..."
+            centerOnCurrentLocation(context) { loc ->
+                pickedLat = loc.latitude
+                pickedLng = loc.longitude
+                val latStr = String.format("%.4f", loc.latitude)
+                val lngStr = String.format("%.4f", loc.longitude)
+                statusText = "📍 Current GPS: $latStr, $lngStr"
+                webViewRef?.evaluateJavascript(
+                    "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
+                    null
+                )
+            }
+        } else {
+            Toast.makeText(context, "Location permission is required for GPS centering", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Init from existing first zone or current GPS
     LaunchedEffect(Unit) {
@@ -104,27 +127,25 @@ fun MapZoneScreen(
             pickedLat = first.lat
             pickedLng = first.lng
             radiusKm = first.radiusKm.toFloat()
-        }
-    }
-
-    // Permission launcher for Location
-    val locationLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { perms ->
-        val granted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) {
-            centerOnCurrentLocation(context) { loc ->
-                pickedLat = loc.latitude
-                pickedLng = loc.longitude
-                statusText = "📍 Current GPS: ${String.format("%.4f", loc.latitude)}, ${String.format("%.4f", loc.longitude)}"
-                webViewRef?.evaluateJavascript(
-                    "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
-                    null
-                )
-            }
         } else {
-            Toast.makeText(context, "Location permission is required for GPS centering", Toast.LENGTH_SHORT).show()
+            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (fine || coarse) {
+                statusText = "📍 Fetching GPS location..."
+                centerOnCurrentLocation(context) { loc ->
+                    pickedLat = loc.latitude
+                    pickedLng = loc.longitude
+                    val latStr = String.format("%.4f", loc.latitude)
+                    val lngStr = String.format("%.4f", loc.longitude)
+                    statusText = "📍 Current GPS: $latStr, $lngStr"
+                    webViewRef?.evaluateJavascript(
+                        "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
+                        null
+                    )
+                }
+            } else {
+                locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }
         }
     }
 
@@ -589,6 +610,7 @@ fun MapZoneScreen(
     }
 }
 
+@SuppressLint("MissingPermission")
 private fun centerOnCurrentLocation(context: Context, onLocationFound: (Location) -> Unit) {
     try {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
@@ -602,7 +624,28 @@ private fun centerOnCurrentLocation(context: Context, onLocationFound: (Location
         }
         if (bestLoc != null) {
             onLocationFound(bestLoc)
+            return
         }
+
+        // Active GPS listener fallback when cached location is null
+        val listener = object : android.location.LocationListener {
+            override fun onLocationChanged(loc: Location) {
+                try { lm.removeUpdates(this) } catch (_: Exception) {}
+                onLocationFound(loc)
+            }
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
+            override fun onProviderEnabled(p: String) {}
+            override fun onProviderDisabled(p: String) {}
+        }
+        for (p in providers) {
+            try {
+                lm.requestLocationUpdates(p, 500L, 0f, listener, android.os.Looper.getMainLooper())
+            } catch (_: Exception) {}
+        }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try { lm.removeUpdates(listener) } catch (_: Exception) {}
+        }, 8000L)
     } catch (e: SecurityException) {
         // Location permission handled by caller
     }

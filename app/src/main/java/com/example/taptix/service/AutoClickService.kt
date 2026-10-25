@@ -82,7 +82,8 @@ class AutoClickService : AccessibilityService() {
 
     private var lastAcceptTime = 0L
 
-    private var hasSoundPlayed = false  // Sound plays ONCE per accept, then stays silent
+    private var hasSoundPlayed = false
+    private var cachedLocation: Pair<Double, Double>? = null  // Sound plays ONCE per accept, then stays silent
 
     private var lastAutoLaunchedPackage: String = ""
 
@@ -633,11 +634,17 @@ class AutoClickService : AccessibilityService() {
 
     ) {
 
-        // Fix D: Never scan while the foreground window belongs to our own app
+        // Never scan while foreground or active window belongs to Taptix or system settings
+        val foregroundPkg = (event?.packageName?.toString() ?: "").lowercase()
+        val activePkg = (rootInActiveWindow?.packageName?.toString() ?: "").lowercase()
+        val ownPkg = packageName.lowercase()
 
-        val foregroundPkg = event?.packageName?.toString() ?: ""
-
-        if (foregroundPkg.isNotEmpty() && foregroundPkg == packageName) return
+        if (foregroundPkg.contains("taptix") || foregroundPkg == ownPkg ||
+            activePkg.contains("taptix") || activePkg == ownPkg ||
+            foregroundPkg.contains("settings") || activePkg.contains("settings") ||
+            foregroundPkg.contains("systemui") || activePkg.contains("systemui")) {
+            return
+        }
 
         val settings = prefsRepo.getSettings()
 
@@ -724,54 +731,60 @@ class AutoClickService : AccessibilityService() {
     }
 
     private fun findAndExecuteAccept(
-
         rootNode: AccessibilityNodeInfo,
-
         keywords: List<String>,
-
         settings: com.example.taptix.data.AppSettings = prefsRepo.getSettings()
-
     ): Boolean {
-
-        // Step 0: Ensure the root node belongs to a supported ride partner app (Rule 4: Exact match, no shortcuts)
-
-        val appPkg = rootNode.packageName?.toString() ?: ""
-
-        if (appPkg.isNotBlank()) {
-
-            val targets = settings.targetAppPackages.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
-
-            val isKnownTarget = targets.any { it.equals(appPkg.lowercase(), ignoreCase = true) }
-
-            // isDemoScreen removed — own package must NOT trigger auto-accept
-
-            if (!isKnownTarget && !settings.ultraModeEnabled) {
-
-                // Not a supported ride partner app, ignore
-
-                return false
-
-            }
-
-        }
-
-        // Per-app profile: check if auto-accept is enabled for this specific app
-
-        if (appPkg.isNotBlank()) {
-
-            val profile = prefsRepo.getAppProfile(appPkg)
-
-            if (profile != null && !profile.enabled) {
-
-                Log.d(TAG, "Per-app profile disabled for $ppPkg, skipping")
-
-                return false
-
-            }
-
+        // Step 0: Ensure root node and matched node NEVER belong to Taptix, System UI, or Settings
+        val rootPkg = (rootNode.packageName?.toString() ?: "").lowercase()
+        val ownPkg = packageName.lowercase()
+        if (rootPkg.contains("taptix") || rootPkg == ownPkg || rootPkg.contains("systemui") || rootPkg.contains("settings")) {
+            return false
         }
 
         val matchedNode = findNodeWithKeywords(rootNode, keywords) ?: return false
+
+        val matchedPkg = (matchedNode.packageName?.toString() ?: "").lowercase()
+        if (matchedPkg.contains("taptix") || matchedPkg == ownPkg || matchedPkg.contains("systemui") || matchedPkg.contains("settings")) {
+            return false
+        }
+
+        // Strict Target App Whitelist: ONLY accept genuine driver partner apps
+        val defaultRideApps = listOf(
+            "com.ubercab.driver",
+            "com.olacabs.driver",
+            "com.rapido.captain",
+            "com.rapido.passenger",
+            "com.indriver",
+            "com.moveinsync",
+            "com.nammayatri",
+            "in.porter",
+            "com.theporter",
+            "me.lyft.driver",
+            "com.grabtaxi.driver2",
+            "com.dd.driver"
+        )
+        val customTargets = settings.targetAppPackages.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        val allTargets = (defaultRideApps + customTargets).distinct()
+
+        val candidatePkg = if (matchedPkg.isNotBlank()) matchedPkg else rootPkg
+        val isPartnerApp = allTargets.any { target ->
+            candidatePkg.contains(target) || rootPkg.contains(target) || matchedPkg.contains(target)
+        }
+
+        if (!isPartnerApp) {
+            // Not a supported ride partner app, ignore
+            return false
+        }
+
+        val appPkg = if (candidatePkg.isNotBlank()) candidatePkg else "ride_partner"
+
+        // Per-app profile: check if auto-accept is enabled for this specific app
+        val profile = prefsRepo.getAppProfile(appPkg)
+        if (profile != null && !profile.enabled) {
+            Log.d(TAG, "Per-app profile disabled for $appPkg, skipping")
+            return false
+        }
 
         val rect = Rect()
 
@@ -1000,14 +1013,13 @@ class AutoClickService : AccessibilityService() {
             )
 
             for (provider in providers) {
-
                 val loc = lm.getLastKnownLocation(provider)
-
-                if (loc != null) return Pair(loc.latitude, loc.longitude)
-
+                if (loc != null) {
+                    cachedLocation = Pair(loc.latitude, loc.longitude)
+                    return cachedLocation
+                }
             }
-
-            null
+            cachedLocation
 
         } catch (e: Exception) {
 

@@ -1,5 +1,10 @@
 package com.example.taptix
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import android.app.Activity
+
 import com.google.android.play.core.appupdate.AppUpdateInfo
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
@@ -319,6 +324,12 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
     }
 
+    val locationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        refreshDiagnostics()
+    }
+
     DisposableEffect(lifecycleOwner) {
 
         val obs = LifecycleEventObserver { _, event ->
@@ -547,30 +558,42 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
                 diagnostics = listOf(
 
-                    DiagnosticItem("Accessibility Engine", "Required to detect and tap accept buttons", isAccessibilityOn) {
-
+                    DiagnosticItem("Accessibility Engine", "Required to detect and tap driver alerts", isAccessibilityOn) {
                         showAccessibilityDisclosure = true
-
                     },
-
                     DiagnosticItem("Floating Overlay", "Required for on-screen driver controls", isOverlayOn) {
-
                         context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
-
                     },
-
                     DiagnosticItem("GPS Location", "Required for geofenced map zone filtering", isLocationOn) {
-
-                        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-
+                        if (!isLocationOn) {
+                            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                            if (fine || coarse) {
+                                refreshDiagnostics()
+                            } else {
+                                val act = context as? Activity
+                                val rationale = act?.let {
+                                    ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.ACCESS_FINE_LOCATION)
+                                } ?: false
+                                if (rationale) {
+                                    try {
+                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        }
+                                        context.startActivity(intent)
+                                        Toast.makeText(context, "Please allow Location in App Permissions", Toast.LENGTH_LONG).show()
+                                    } catch (_: Exception) {
+                                        locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                                    }
+                                } else {
+                                    locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                                }
+                            }
+                        }
                     },
-
-                    DiagnosticItem("Battery Exemption", "Prevents OEM systems from pausing auto-accept", isBatteryOptIgnored) {
-
+                    DiagnosticItem("Battery Exemption", "Prevents OEM systems from pausing background helper", isBatteryOptIgnored) {
                         showBatteryGuidance = true
-
                     }
-
                 ),
 
                 onOpenBatteryGuide = { showBatteryGuidance = true },
@@ -579,6 +602,8 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                         showAccessibilityDisclosure = true
                     } else if (!isOverlayOn) {
                         context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
+                    } else if (!isLocationOn) {
+                        locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
                 }
 
