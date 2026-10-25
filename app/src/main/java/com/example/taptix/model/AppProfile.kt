@@ -1,12 +1,15 @@
 package com.example.taptix.model
 
+import org.json.JSONArray
+import org.json.JSONObject
+
 /**
  * Per-app profile configuration. Each supported ride-hailing platform
  * can have its own acceptance rules, keywords, and settings.
  */
 data class AppProfile(
     val packageName: String,                        // e.g., "com.ubercab.driver"
-    val displayName: String,                        // e.g., "Uber Driver"
+    val displayName: String = "",                   // e.g., "Uber Driver"
     val enabled: Boolean = true,                    // Whether auto-accept is enabled for this app
     val customKeywords: List<String> = emptyList(), // App-specific accept keywords (empty = use global)
     val negativeKeywords: List<String> = emptyList(), // App-specific reject keywords (empty = use global)
@@ -15,6 +18,24 @@ data class AppProfile(
     val useGlobalZones: Boolean = true,             // Whether to use global zone settings
     val cooldownMs: Long = 1500L                    // Per-app cooldown between taps
 ) {
+    fun toJson(): JSONObject {
+        val obj = JSONObject()
+        obj.put("packageName", packageName)
+        obj.put("displayName", displayName)
+        obj.put("enabled", enabled)
+        val ck = JSONArray()
+        customKeywords.forEach { ck.put(it) }
+        obj.put("customKeywords", ck)
+        val nk = JSONArray()
+        negativeKeywords.forEach { nk.put(it) }
+        obj.put("negativeKeywords", nk)
+        if (minFare != null) obj.put("minFare", minFare)
+        if (maxPickupDistanceKm != null) obj.put("maxPickupDistanceKm", maxPickupDistanceKm)
+        obj.put("useGlobalZones", useGlobalZones)
+        obj.put("cooldownMs", cooldownMs)
+        return obj
+    }
+
     companion object {
         /** Default profiles for all supported platforms */
         val DEFAULTS: List<AppProfile> = listOf(
@@ -35,6 +56,39 @@ data class AppProfile(
         fun getDisplayName(packageName: String): String {
             return DEFAULTS.firstOrNull { it.packageName == packageName }?.displayName
                 ?: packageName.substringAfterLast('.')
+        }
+
+        fun fromJson(obj: JSONObject): AppProfile {
+            val pkg = obj.optString("packageName", "")
+            val name = obj.optString("displayName", getDisplayName(pkg))
+            val enabled = obj.optBoolean("enabled", true)
+
+            val ckList = mutableListOf<String>()
+            val ckArr = obj.optJSONArray("customKeywords")
+            if (ckArr != null) {
+                for (i in 0 until ckArr.length()) ckList.add(ckArr.optString(i))
+            }
+
+            val nkList = mutableListOf<String>()
+            val nkArr = obj.optJSONArray("negativeKeywords")
+            if (nkArr != null) {
+                for (i in 0 until nkArr.length()) nkList.add(nkArr.optString(i))
+            }
+
+            val mf = if (obj.has("minFare") && !obj.isNull("minFare")) obj.optDouble("minFare") else null
+            val maxDist = if (obj.has("maxPickupDistanceKm") && !obj.isNull("maxPickupDistanceKm")) obj.optDouble("maxPickupDistanceKm") else null
+
+            return AppProfile(
+                packageName = pkg,
+                displayName = name,
+                enabled = enabled,
+                customKeywords = ckList,
+                negativeKeywords = nkList,
+                minFare = mf,
+                maxPickupDistanceKm = maxDist,
+                useGlobalZones = obj.optBoolean("useGlobalZones", true),
+                cooldownMs = obj.optLong("cooldownMs", 1500L)
+            )
         }
     }
 }

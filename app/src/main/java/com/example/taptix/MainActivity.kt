@@ -268,7 +268,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
     var appSettings        by remember { mutableStateOf(prefsRepo.getSettings()) }
 
-    var scheduleConfig     by remember { mutableStateOf(prefsRepo.getScheduleConfig()) }
+    var scheduleConfig by remember { mutableStateOf(prefsRepo.getScheduleConfig()) }
 
     var smartRules by remember { mutableStateOf(prefsRepo.getSmartAcceptRules()) }
 
