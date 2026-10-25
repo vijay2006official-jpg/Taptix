@@ -640,7 +640,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                             context.startForegroundService(i) else context.startService(i)
                         AutoClickService.instance?.setClickingActive(true)
                     } else {
-                        context.stopService(Intent(context, OverlayService::class.java))
+                        OverlayService.stopService(context)
                         AutoClickService.instance?.setClickingActive(false)
                     }
                     appSettings = prefsRepo.getSettings()
