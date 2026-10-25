@@ -3,8 +3,13 @@ package com.example.taptix.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.taptix.model.AppProfile
+import com.example.taptix.model.AreaGroup
+import com.example.taptix.model.MapZone
 import com.example.taptix.model.OperatingMode
 import com.example.taptix.model.PlatformPreset
+import com.example.taptix.model.SmartAcceptRules
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Lightweight repository for saving and loading driver preferences without external dependencies.
@@ -28,7 +33,7 @@ class PreferencesRepository(context: Context) {
 
         val customKeywords = prefs.getString(KEY_CUSTOM_KEYWORDS, "ACCEPT, CONFIRM, RIDE") ?: "ACCEPT, CONFIRM, RIDE"
         val autoPause = prefs.getBoolean(KEY_AUTO_PAUSE, true)
-        val motionLock = prefs.getBoolean(KEY_MOTION_LOCK, false)  // Default OFF — many drivers not moving
+        val motionLock = prefs.getBoolean(KEY_MOTION_LOCK, false)
         val tts = prefs.getBoolean(KEY_TTS, true)
 
         val autoLaunch = prefs.getBoolean(KEY_AUTO_LAUNCH, true)
@@ -36,22 +41,22 @@ class PreferencesRepository(context: Context) {
         val autoHide = prefs.getBoolean(KEY_AUTO_HIDE, false)
         val voiceCommands = prefs.getBoolean(KEY_VOICE_COMMANDS, true)
 
-        val nightModeDim = prefs.getBoolean(KEY_NIGHT_MODE_AUTO_DIM, false)
+        val nightModeDim = prefs.getBoolean(KEY_NIGHT_MODE_AUTO_DIM, true)
         val dimIntensity = prefs.getFloat(KEY_NIGHT_MODE_DIM_INTENSITY, 0.35f)
         val dimDelay = prefs.getInt(KEY_AUTO_DIM_DELAY, 8)
         val pixelShift = prefs.getBoolean(KEY_PIXEL_SHIFT, true)
         val autoPauseKeyboard = prefs.getBoolean(KEY_AUTO_PAUSE_KEYBOARD, false)
 
-        // v1.7 new settings
         val masterControl = prefs.getBoolean(KEY_MASTER_CONTROL, false)
-        val ultraMode     = prefs.getBoolean(KEY_ULTRA_MODE, false)
-        val mapZoneOn     = prefs.getBoolean(KEY_MAP_ZONE_ENABLED, false)
-        val mapZoneLat    = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_LAT, java.lang.Double.doubleToRawLongBits(0.0)))
-        val mapZoneLng    = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_LNG, java.lang.Double.doubleToRawLongBits(0.0)))
+        val ultraMode = prefs.getBoolean(KEY_ULTRA_MODE, false)
+        val mapZoneOn = prefs.getBoolean(KEY_MAP_ZONE_ENABLED, false)
+        val mapZoneLat = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_LAT, java.lang.Double.doubleToRawLongBits(0.0)))
+        val mapZoneLng = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_LNG, java.lang.Double.doubleToRawLongBits(0.0)))
         val mapZoneRadius = java.lang.Double.longBitsToDouble(prefs.getLong(KEY_MAP_ZONE_RADIUS, java.lang.Double.doubleToRawLongBits(2.0)))
-        val vibrationOn   = prefs.getBoolean(KEY_VIBRATION, true)
+        val vibrationOn = prefs.getBoolean(KEY_VIBRATION, true)
         val negativeKeywords = prefs.getString(KEY_NEGATIVE_KEYWORDS, "CASH, LOW RATING, SHARED") ?: "CASH, LOW RATING, SHARED"
         val preferredAreas = prefs.getString(KEY_PREFERRED_AREAS, "") ?: ""
+        val targetAreasOn = prefs.getBoolean(KEY_TARGET_AREAS_ENABLED, false)
 
         return AppSettings(
             clickIntervalMs = interval,
@@ -82,68 +87,159 @@ class PreferencesRepository(context: Context) {
         )
     }
 
-    fun saveClickInterval(intervalMs: Long) {
-        prefs.edit().putLong(KEY_INTERVAL, intervalMs).apply()
+    // --- Smart Accept Rules ---
+
+    fun getSmartAcceptRules(): SmartAcceptRules {
+        val jsonStr = prefs.getString(KEY_SMART_RULES_JSON, null)
+        if (!jsonStr.isNullOrBlank()) {
+            try {
+                return SmartAcceptRules.fromJson(JSONObject(jsonStr))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return SmartAcceptRules()
     }
 
-    fun saveOperatingMode(mode: OperatingMode) {
-        prefs.edit().putString(KEY_MODE, mode.name).apply()
+    fun saveSmartAcceptRules(rules: SmartAcceptRules) {
+        prefs.edit().putString(KEY_SMART_RULES_JSON, rules.toJson().toString()).apply()
     }
 
-    fun savePlatformPreset(preset: PlatformPreset) {
-        prefs.edit().putString(KEY_PRESET, preset.id).apply()
+    // --- Shift Schedule Config ---
+
+    fun getScheduleConfig(): ScheduleConfig {
+        val jsonStr = prefs.getString(KEY_SCHEDULE_JSON, null)
+        if (!jsonStr.isNullOrBlank()) {
+            try {
+                return ScheduleConfig.fromJson(JSONObject(jsonStr))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return ScheduleConfig()
     }
 
-    fun saveCustomKeywords(keywords: String) {
-        prefs.edit().putString(KEY_CUSTOM_KEYWORDS, keywords).apply()
+    fun saveScheduleConfig(config: ScheduleConfig) {
+        prefs.edit().putString(KEY_SCHEDULE_JSON, config.toJson().toString()).apply()
     }
 
-    fun saveAutoPauseOnAccept(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUTO_PAUSE, enabled).apply()
+    // --- Map Work Zones ---
+
+    fun getMapZones(): List<MapZone> {
+        val jsonStr = prefs.getString(KEY_MAP_ZONES_JSON, null) ?: return emptyList()
+        val list = mutableListOf<MapZone>()
+        try {
+            val arr = JSONArray(jsonStr)
+            for (i in 0 until arr.length()) {
+                list.add(MapZone.fromJson(arr.getJSONObject(i)))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
     }
 
-    fun saveMotionSafetyLockEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_MOTION_LOCK, enabled).apply()
+    fun getActiveZones(): List<MapZone> {
+        return getMapZones().filter { it.isEnabled }
     }
 
-    fun saveTtsFeedbackEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_TTS, enabled).apply()
+    fun saveMapZones(zones: List<MapZone>) {
+        val arr = JSONArray()
+        zones.forEach { arr.put(it.toJson()) }
+        prefs.edit().putString(KEY_MAP_ZONES_JSON, arr.toString()).apply()
     }
 
-    fun saveAutoLaunchForTargetAppsEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUTO_LAUNCH, enabled).apply()
+    fun addOrUpdateMapZone(zone: MapZone) {
+        val current = getMapZones().toMutableList()
+        val index = current.indexOfFirst { it.id == zone.id }
+        if (index >= 0) {
+            current[index] = zone
+        } else {
+            current.add(zone)
+        }
+        saveMapZones(current)
     }
 
-    fun saveTargetAppPackages(packages: String) {
-        prefs.edit().putString(KEY_TARGET_PACKAGES, packages).apply()
+    // --- Area Groups / Profiles ---
+
+    fun getAreaGroups(): List<AreaGroup> {
+        val jsonStr = prefs.getString(KEY_AREA_GROUPS_JSON, null)
+        if (jsonStr.isNullOrBlank()) {
+            return listOf(
+                AreaGroup(name = "Downtown & Business District", isSelected = true),
+                AreaGroup(name = "Airport & Expressways", isSelected = false)
+            )
+        }
+        val list = mutableListOf<AreaGroup>()
+        try {
+            val arr = JSONArray(jsonStr)
+            for (i in 0 until arr.length()) {
+                list.add(AreaGroup.fromJson(arr.getJSONObject(i)))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
     }
 
-    fun saveAutoHideOnExit(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUTO_HIDE, enabled).apply()
+    fun saveAreaGroups(groups: List<AreaGroup>) {
+        val arr = JSONArray()
+        groups.forEach { arr.put(it.toJson()) }
+        prefs.edit().putString(KEY_AREA_GROUPS_JSON, arr.toString()).apply()
     }
 
-    fun saveVoiceCommandsEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_VOICE_COMMANDS, enabled).apply()
+    // --- App Profile ---
+
+    fun getAppProfile(packageName: String): AppProfile {
+        val jsonStr = prefs.getString("KEY_APP_PROFILE_$packageName", null)
+        if (!jsonStr.isNullOrBlank()) {
+            try {
+                return AppProfile.fromJson(JSONObject(jsonStr))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return AppProfile(packageName = packageName, enabled = true)
     }
 
-    fun saveNightModeAutoDimEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_NIGHT_MODE_AUTO_DIM, enabled).apply()
+    fun saveAppProfile(profile: AppProfile) {
+        prefs.edit().putString("KEY_APP_PROFILE_${profile.packageName}", profile.toJson().toString()).apply()
     }
 
-    fun saveAutoDimDelaySeconds(seconds: Int) {
-        prefs.edit().putInt(KEY_AUTO_DIM_DELAY, seconds).apply()
-    }
+    fun isTargetAreasEnabled(): Boolean = prefs.getBoolean(KEY_TARGET_AREAS_ENABLED, false)
+    fun saveTargetAreasEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_TARGET_AREAS_ENABLED, enabled).apply()
 
-    fun savePixelShiftBurnInProtection(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_PIXEL_SHIFT, enabled).apply()
-    }
+    // --- Basic Setters ---
 
-    fun saveNightModeDimIntensity(intensity: Float) {
-        prefs.edit().putFloat(KEY_NIGHT_MODE_DIM_INTENSITY, intensity).apply()
-    }
+    fun saveClickInterval(intervalMs: Long) = prefs.edit().putLong(KEY_INTERVAL, intervalMs).apply()
+    fun saveOperatingMode(mode: OperatingMode) = prefs.edit().putString(KEY_MODE, mode.name).apply()
+    fun savePlatformPreset(preset: PlatformPreset) = prefs.edit().putString(KEY_PRESET, preset.id).apply()
+    fun saveCustomKeywords(keywords: String) = prefs.edit().putString(KEY_CUSTOM_KEYWORDS, keywords).apply()
+    fun saveAutoPauseOnAccept(enabled: Boolean) = prefs.edit().putBoolean(KEY_AUTO_PAUSE, enabled).apply()
+    fun saveMotionSafetyLockEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_MOTION_LOCK, enabled).apply()
+    fun saveTtsFeedbackEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_TTS, enabled).apply()
+    fun saveAutoLaunchForTargetAppsEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_AUTO_LAUNCH, enabled).apply()
+    fun saveTargetAppPackages(packages: String) = prefs.edit().putString(KEY_TARGET_PACKAGES, packages).apply()
+    fun saveAutoHideOnExit(enabled: Boolean) = prefs.edit().putBoolean(KEY_AUTO_HIDE, enabled).apply()
+    fun saveVoiceCommandsEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_VOICE_COMMANDS, enabled).apply()
+    fun saveNightModeAutoDimEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_NIGHT_MODE_AUTO_DIM, enabled).apply()
+    fun saveAutoDimDelaySeconds(seconds: Int) = prefs.edit().putInt(KEY_AUTO_DIM_DELAY, seconds).apply()
+    fun savePixelShiftBurnInProtection(enabled: Boolean) = prefs.edit().putBoolean(KEY_PIXEL_SHIFT, enabled).apply()
+    fun saveNightModeDimIntensity(intensity: Float) = prefs.edit().putFloat(KEY_NIGHT_MODE_DIM_INTENSITY, intensity).apply()
+    fun saveAutoPauseOnKeyboard(enabled: Boolean) = prefs.edit().putBoolean(KEY_AUTO_PAUSE_KEYBOARD, enabled).apply()
+    fun saveMasterControl(enabled: Boolean) = prefs.edit().putBoolean(KEY_MASTER_CONTROL, enabled).apply()
+    fun saveUltraMode(enabled: Boolean) = prefs.edit().putBoolean(KEY_ULTRA_MODE, enabled).apply()
+    fun saveMapZoneEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_MAP_ZONE_ENABLED, enabled).apply()
+    fun saveVibrationOnAccept(enabled: Boolean) = prefs.edit().putBoolean(KEY_VIBRATION, enabled).apply()
+    fun saveNegativeKeywords(keywords: String) = prefs.edit().putString(KEY_NEGATIVE_KEYWORDS, keywords).apply()
+    fun savePreferredAreas(areas: String) = prefs.edit().putString(KEY_PREFERRED_AREAS, areas).apply()
 
-    fun saveAutoPauseOnKeyboard(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUTO_PAUSE_KEYBOARD, enabled).apply()
+    fun saveMapZone(lat: Double, lng: Double, radiusKm: Double) {
+        prefs.edit()
+            .putLong(KEY_MAP_ZONE_LAT, java.lang.Double.doubleToRawLongBits(lat))
+            .putLong(KEY_MAP_ZONE_LNG, java.lang.Double.doubleToRawLongBits(lng))
+            .putLong(KEY_MAP_ZONE_RADIUS, java.lang.Double.doubleToRawLongBits(radiusKm))
+            .apply()
     }
 
     companion object {
@@ -164,10 +260,9 @@ class PreferencesRepository(context: Context) {
         private const val KEY_AUTO_DIM_DELAY = "key_auto_dim_delay"
         private const val KEY_PIXEL_SHIFT = "key_pixel_shift"
         private const val KEY_AUTO_PAUSE_KEYBOARD = "key_auto_pause_keyboard"
-        // v1.7 new keys
+
         private const val KEY_MASTER_CONTROL = "key_master_control"
         private const val KEY_ULTRA_MODE = "key_ultra_mode"
-        private const val KEY_TARGET_AREAS_ENABLED = "key_target_areas_enabled"
         private const val KEY_MAP_ZONE_ENABLED = "key_map_zone_enabled"
         private const val KEY_MAP_ZONE_LAT = "key_map_zone_lat"
         private const val KEY_MAP_ZONE_LNG = "key_map_zone_lng"
@@ -175,214 +270,14 @@ class PreferencesRepository(context: Context) {
         private const val KEY_VIBRATION = "key_vibration_on_accept"
         private const val KEY_NEGATIVE_KEYWORDS = "key_negative_keywords"
         private const val KEY_PREFERRED_AREAS = "key_preferred_areas"
+        private const val KEY_TARGET_AREAS_ENABLED = "key_target_areas_enabled"
+
+        private const val KEY_SMART_RULES_JSON = "key_smart_rules_json"
+        private const val KEY_SCHEDULE_JSON = "key_schedule_json"
         private const val KEY_MAP_ZONES_JSON = "key_map_zones_json"
         private const val KEY_AREA_GROUPS_JSON = "key_area_groups_json"
 
         private const val DEFAULT_TARGET_PACKAGES =
             "com.ubercab.driver, com.olacabs.driver, com.olacabs.partner, com.rapido.captain, com.rapido.passenger, com.indriver, sinet.startup.inDriver, in.juspay.nammayatripartner, com.theporter.partner, me.lyft.driver, com.grabtaxi.driver2, com.dd.driver"
-    }
-
-    // v1.7 Save methods
-    fun saveMasterControl(enabled: Boolean) = prefs.edit().putBoolean(KEY_MASTER_CONTROL, enabled).apply()
-    fun saveUltraMode(enabled: Boolean) = prefs.edit().putBoolean(KEY_ULTRA_MODE, enabled).apply()
-    fun saveMapZoneEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_MAP_ZONE_ENABLED, enabled).apply()
-    fun saveVibrationOnAccept(enabled: Boolean) = prefs.edit().putBoolean(KEY_VIBRATION, enabled).apply()
-    fun saveNegativeKeywords(keywords: String) = prefs.edit().putString(KEY_NEGATIVE_KEYWORDS, keywords).apply()
-    fun savePreferredAreas(areas: String) = prefs.edit().putString(KEY_PREFERRED_AREAS, areas).apply()
-    fun saveMapZone(lat: Double, lng: Double, radiusKm: Double) {
-        prefs.edit()
-            .putLong(KEY_MAP_ZONE_LAT, java.lang.Double.doubleToRawLongBits(lat))
-            .putLong(KEY_MAP_ZONE_LNG, java.lang.Double.doubleToRawLongBits(lng))
-            .putLong(KEY_MAP_ZONE_RADIUS, java.lang.Double.doubleToRawLongBits(radiusKm))
-            .apply()
-    }
-
-    // Multi-zone management (Phase 2 Item 12)
-    fun getMapZones(): List<com.example.taptix.model.MapZone> {
-        val raw = prefs.getString(KEY_MAP_ZONES_JSON, null)
-        if (raw.isNullOrBlank()) {
-            val settings = getSettings()
-            if (settings.mapZoneLat != 0.0 && settings.mapZoneLng != 0.0) {
-                return listOf(
-                    com.example.taptix.model.MapZone(
-                        name = "Primary Zone",
-                        lat = settings.mapZoneLat,
-                        lng = settings.mapZoneLng,
-                        radiusKm = settings.mapZoneRadiusKm,
-                        isEnabled = true
-                    )
-                )
-            }
-            return emptyList()
-        }
-        return try {
-            val arr = org.json.JSONArray(raw)
-            val list = mutableListOf<com.example.taptix.model.MapZone>()
-            for (i in 0 until arr.length()) {
-                list.add(com.example.taptix.model.MapZone.fromJson(arr.getJSONObject(i)))
-            }
-            list
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    fun saveMapZones(zones: List<com.example.taptix.model.MapZone>) {
-        val arr = org.json.JSONArray()
-        zones.forEach { arr.put(it.toJson()) }
-        prefs.edit().putString(KEY_MAP_ZONES_JSON, arr.toString()).apply()
-
-        // Sync first active zone to legacy keys for backward compatibility
-        val firstActive = zones.firstOrNull { it.isEnabled } ?: zones.firstOrNull()
-        if (firstActive != null) {
-            saveMapZone(firstActive.lat, firstActive.lng, firstActive.radiusKm)
-        }
-    }
-
-    fun addOrUpdateMapZone(zone: com.example.taptix.model.MapZone) {
-        val current = getMapZones().toMutableList()
-        val index = current.indexOfFirst { it.id == zone.id }
-        if (index >= 0) {
-            current[index] = zone
-        } else {
-            current.add(zone)
-        }
-        saveMapZones(current)
-    }
-
-    fun deleteMapZone(id: String) {
-        val current = getMapZones().filterNot { it.id == id }
-        saveMapZones(current)
-    }
-
-    // Custom Area Lists (Phase 2 Item 13)
-    fun getAreaGroups(): List<com.example.taptix.model.AreaGroup> {
-        val raw = prefs.getString(KEY_AREA_GROUPS_JSON, null) ?: return emptyList()
-        return try {
-            val arr = org.json.JSONArray(raw)
-            val list = mutableListOf<com.example.taptix.model.AreaGroup>()
-            for (i in 0 until arr.length()) {
-                list.add(com.example.taptix.model.AreaGroup.fromJson(arr.getJSONObject(i)))
-            }
-            list
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    fun saveAreaGroups(groups: List<com.example.taptix.model.AreaGroup>) {
-        val arr = org.json.JSONArray()
-        groups.forEach { arr.put(it.toJson()) }
-        prefs.edit().putString(KEY_AREA_GROUPS_JSON, arr.toString()).apply()
-    }
-
-    fun selectAreaGroup(groupId: String?) {
-        val groups = getAreaGroups().map {
-            it.copy(isSelected = (it.id == groupId))
-        }
-        saveAreaGroups(groups)
-    }
-
-    /**
-     * Resolves the currently active list of zones to enforce during auto-accept.
-     */
-    fun getActiveZones(): List<com.example.taptix.model.MapZone> {
-        val allZones = getMapZones()
-        val selectedGroup = getAreaGroups().firstOrNull { it.isSelected }
-        return if (selectedGroup != null) {
-            allZones.filter { it.id in selectedGroup.zoneIds && it.isEnabled }
-        } else {
-            allZones.filter { it.isEnabled }
-        }
-    }
-
-    // Schedule window settings (Phase 5 Item 30)
-    fun getScheduleConfig(): ScheduleConfig {
-        val raw = prefs.getString("key_schedule_config_json", null) ?: return ScheduleConfig()
-        return try {
-            ScheduleConfig.fromJson(org.json.JSONObject(raw))
-        } catch (e: Exception) {
-            ScheduleConfig()
-        }
-    }
-
-    fun saveScheduleConfig(config: ScheduleConfig) {
-        prefs.edit().putString("key_schedule_config_json", config.toJson().toString()).apply()
-    }
-
-    // Smart Accept Rules (Feature 3 & 4)
-    fun getSmartAcceptRules(): com.example.taptix.model.SmartAcceptRules {
-        val raw = prefs.getString("key_smart_accept_rules_json", null) ?: return com.example.taptix.model.SmartAcceptRules()
-        return try {
-            com.example.taptix.model.SmartAcceptRules.fromJson(org.json.JSONObject(raw))
-        } catch (e: Exception) {
-            com.example.taptix.model.SmartAcceptRules()
-        }
-    }
-
-    fun saveSmartAcceptRules(rules: com.example.taptix.model.SmartAcceptRules) {
-        prefs.edit().putString("key_smart_accept_rules_json", rules.toJson().toString()).apply()
-    }
-
-    // --- Per-App Profiles (v2.1) ---
-
-    fun getAppProfiles(): List<AppProfile> {
-        val json = prefs.getString("key_app_profiles_json", null) ?: return AppProfile.DEFAULTS
-        return try {
-            val arr = org.json.JSONArray(json)
-            (0 until arr.length()).map { i ->
-                val obj = arr.getJSONObject(i)
-                AppProfile(
-                    packageName = obj.getString("packageName"),
-                    displayName = obj.getString("displayName"),
-                    enabled = obj.optBoolean("enabled", true),
-                    customKeywords = obj.optString("customKeywords", "").split(",").filter { it.isNotBlank() },
-                    negativeKeywords = obj.optString("negativeKeywords", "").split(",").filter { it.isNotBlank() },
-                    minFare = if (obj.has("minFare")) obj.getDouble("minFare") else null,
-                    maxPickupDistanceKm = if (obj.has("maxPickupDistanceKm")) obj.getDouble("maxPickupDistanceKm") else null,
-                    useGlobalZones = obj.optBoolean("useGlobalZones", true),
-                    cooldownMs = obj.optLong("cooldownMs", 1500L)
-                )
-            }
-        } catch (e: Exception) {
-            AppProfile.DEFAULTS
-        }
-    }
-
-    fun saveAppProfiles(profiles: List<AppProfile>) {
-        val arr = org.json.JSONArray()
-        profiles.forEach { p ->
-            val obj = org.json.JSONObject().apply {
-                put("packageName", p.packageName)
-                put("displayName", p.displayName)
-                put("enabled", p.enabled)
-                put("customKeywords", p.customKeywords.joinToString(","))
-                put("negativeKeywords", p.negativeKeywords.joinToString(","))
-                p.minFare?.let { put("minFare", it) }
-                p.maxPickupDistanceKm?.let { put("maxPickupDistanceKm", it) }
-                put("useGlobalZones", p.useGlobalZones)
-                put("cooldownMs", p.cooldownMs)
-            }
-            arr.put(obj)
-        }
-        prefs.edit().putString("key_app_profiles_json", arr.toString()).apply()
-    }
-
-    fun getAppProfile(packageName: String): AppProfile? {
-        return getAppProfiles().firstOrNull { it.packageName == packageName }
-    }
-
-    fun saveAppProfile(profile: AppProfile) {
-        val profiles = getAppProfiles().toMutableList()
-        val idx = profiles.indexOfFirst { it.packageName == profile.packageName }
-        if (idx >= 0) profiles[idx] = profile else profiles.add(profile)
-        saveAppProfiles(profiles)
-    }
-    fun isTargetAreasEnabled(): Boolean {
-        return prefs.getBoolean(KEY_TARGET_AREAS_ENABLED, false)
-    }
-
-    fun saveTargetAreasEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_TARGET_AREAS_ENABLED, enabled).apply()
     }
 }

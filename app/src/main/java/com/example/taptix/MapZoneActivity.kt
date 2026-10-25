@@ -5,8 +5,11 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -87,30 +90,37 @@ fun MapZoneScreen(
     var pickedLat by remember { mutableStateOf(13.0827) }
     var pickedLng by remember { mutableStateOf(80.2707) }
     var radiusKm by remember { mutableStateOf(2.0f) }
-    var pickedAddress by remember { mutableStateOf("Chinnaiyan Colony, Perambur, Chennai") }
+    var pickedAddress by remember { mutableStateOf("Locating your area...") }
     var searchQuery by remember { mutableStateOf("") }
-    var currentSpeedKmh by remember { mutableStateOf(43) }
+    var currentSpeedKmh by remember { mutableStateOf(0) }
 
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
-    // Init from existing first zone or current GPS
+    val updateMapLocation = { lat: Double, lng: Double ->
+        pickedLat = lat
+        pickedLng = lng
+        webViewRef?.evaluateJavascript(
+            "if(typeof map !== 'undefined'){ map.setView([$lat, $lng], 15); placeMarker($lat, $lng); }",
+            null
+        )
+    }
+
+    val fetchLocationAndCenter = {
+        centerOnCurrentLocation(context) { loc ->
+            if (loc.hasSpeed()) {
+                currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
+            }
+            updateMapLocation(loc.latitude, loc.longitude)
+        }
+    }
+
     val locationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { perms ->
         val granted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
-            centerOnCurrentLocation(context) { loc ->
-                pickedLat = loc.latitude
-                pickedLng = loc.longitude
-                if (loc.hasSpeed()) {
-                    currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
-                }
-                webViewRef?.evaluateJavascript(
-                    "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
-                    null
-                )
-            }
+            fetchLocationAndCenter()
         }
     }
 
@@ -120,24 +130,14 @@ fun MapZoneScreen(
             pickedLat = first.lat
             pickedLng = first.lng
             radiusKm = first.radiusKm.toFloat()
+        }
+
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) {
+            fetchLocationAndCenter()
         } else {
-            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            if (fine || coarse) {
-                centerOnCurrentLocation(context) { loc ->
-                    pickedLat = loc.latitude
-                    pickedLng = loc.longitude
-                    if (loc.hasSpeed()) {
-                        currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
-                    }
-                    webViewRef?.evaluateJavascript(
-                        "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
-                        null
-                    )
-                }
-            } else {
-                locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-            }
+            locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
 
@@ -153,8 +153,10 @@ fun MapZoneScreen(
                         useWideViewPort = true
                         builtInZoomControls = true
                         displayZoomControls = false
-                        allowFileAccess = false
+                        allowFileAccess = true
                         cacheMode = WebSettings.LOAD_DEFAULT
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                     }
                     webChromeClient = WebChromeClient()
                     webViewClient = WebViewClient()
@@ -229,7 +231,7 @@ fun MapZoneScreen(
             ) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (searchQuery.isEmpty()) {
-                        Text("Search area...", color = Color(0xFF94A3B8), fontSize = 14.sp)
+                        Text("Search city or area...", color = Color(0xFF94A3B8), fontSize = 14.sp)
                     }
                     BasicTextField(
                         value = searchQuery,
@@ -287,8 +289,8 @@ fun MapZoneScreen(
         Box(
             Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 225.dp)
-                .size(48.dp)
+                .padding(end = 20.dp, bottom = 245.dp)
+                .size(52.dp)
                 .shadow(6.dp, CircleShape)
                 .clip(CircleShape)
                 .background(Color.White)
@@ -296,24 +298,14 @@ fun MapZoneScreen(
                     val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                     val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
                     if (fine || coarse) {
-                        centerOnCurrentLocation(context) { loc ->
-                            pickedLat = loc.latitude
-                            pickedLng = loc.longitude
-                            if (loc.hasSpeed()) {
-                                currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
-                            }
-                            webViewRef?.evaluateJavascript(
-                                "map.setView([${loc.latitude}, ${loc.longitude}], 14); placeMarker(${loc.latitude}, ${loc.longitude});",
-                                null
-                            )
-                        }
+                        fetchLocationAndCenter()
                     } else {
                         locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
                 },
             contentAlignment = Alignment.Center
         ) {
-            Text("🎯", fontSize = 20.sp)
+            Text("🎯", fontSize = 22.sp)
         }
 
         // ── 5. Bottom Sheet: SET WORK BOUNDARY
@@ -339,10 +331,18 @@ fun MapZoneScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Long press on map to drop a pin. The bot will only accept orders within this circle.",
-                    color = Color(0xFF64748B),
+                    text = pickedAddress,
+                    color = Color(0xFF0066FF),
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
-                    lineHeight = 18.sp
+                    maxLines = 2
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Tap map or drag slider to set area radius. The bot will accept orders within this circle.",
+                    color = Color(0xFF64748B),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
                 )
 
                 Spacer(Modifier.height(14.dp))
@@ -392,7 +392,7 @@ fun MapZoneScreen(
                     onClick = {
                         val newZone = MapZone(
                             id = UUID.randomUUID().toString(),
-                            name = "Work Zone",
+                            name = if (pickedAddress.isNotBlank()) pickedAddress.take(25) else "Work Zone",
                             lat = pickedLat,
                             lng = pickedLng,
                             radiusKm = radiusKm.toDouble(),
@@ -437,25 +437,24 @@ private fun centerOnCurrentLocation(context: Context, onLocationFound: (Location
         }
         if (bestLoc != null) {
             onLocationFound(bestLoc)
-            return
         }
 
-        val listener = object : android.location.LocationListener {
+        val listener = object : LocationListener {
             override fun onLocationChanged(loc: Location) {
                 try { lm.removeUpdates(this) } catch (_: Exception) {}
                 onLocationFound(loc)
             }
             @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
+            override fun onStatusChanged(p: String?, s: Int, e: Bundle?) {}
             override fun onProviderEnabled(p: String) {}
             override fun onProviderDisabled(p: String) {}
         }
         for (p in providers) {
             try {
-                lm.requestLocationUpdates(p, 500L, 0f, listener, android.os.Looper.getMainLooper())
+                lm.requestLocationUpdates(p, 500L, 0f, listener, Looper.getMainLooper())
             } catch (_: Exception) {}
         }
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        Handler(Looper.getMainLooper()).postDelayed({
             try { lm.removeUpdates(listener) } catch (_: Exception) {}
         }, 8000L)
     } catch (_: SecurityException) {}
@@ -508,7 +507,7 @@ $jsBlock
 <div id="map"></div>
 <script>
 var map = L.map('map', {zoomControl:false, attributionControl:false})
-           .setView([$centerLat, $centerLng], 13);
+           .setView([$centerLat, $centerLng], 14);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
