@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "2.2",
+  "versionCode": 12,
+  "versionName": "2.1",
   "apkUrl": "https://raw.githubusercontent.com/vijay2006official-jpg/Taptix/main/amazon_store_assets/Taptix-v2.1-amazon.apk",
-  "releaseNotes": "Taptix v2.2 In-App Update:\n• Instant Floating Overlay Toggle Off Fix\n• Smart Map Zones with GPS Centering & Local Area Names\n• Pickup Distance Filter (GPS Haversine Engine)\n• Smart Acceptance Rules Engine with Diagnostics\n• Persistent Activity Audit Log with 7-Day Expiry\n• 1-Tap Home Screen Widget"
+  "releaseNotes": "Taptix v2.1 Latest Release:\n• Custom Area Profiles & Lists\n• Smart Map Zones with GPS Centering & Local Area Names\n• Pickup Distance Filter (GPS Haversine Engine)\n• Smart Acceptance Rules Engine with Diagnostics\n• Persistent Activity Audit Log with 7-Day Expiry\n• 1-Tap Home Screen Widget"
 }
