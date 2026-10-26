@@ -197,17 +197,28 @@ class UpdateManager(private val context: Context) {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             }
 
-            // Explicitly grant read URI permission to all package installer handlers
-            val resInfoList = context.packageManager.queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY)
-            for (resolveInfo in resInfoList) {
-                val packageName = resolveInfo.activityInfo.packageName
-                context.grantUriPermission(packageName, contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Query available installers and bypass OEM App Stores (e.g. Vivo/Oppo App Market)
+            val installers = context.packageManager.queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            val nativeInstaller = installers.firstOrNull {
+                val pkg = it.activityInfo.packageName.lowercase()
+                pkg.contains("packageinstaller") || pkg.contains("google") || pkg.contains("android")
+            }
+
+            if (nativeInstaller != null) {
+                installIntent.setClassName(nativeInstaller.activityInfo.packageName, nativeInstaller.activityInfo.name)
+                context.grantUriPermission(nativeInstaller.activityInfo.packageName, contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                Log.d("UpdateManager", "Targeting native installer: ${nativeInstaller.activityInfo.packageName}")
+            } else {
+                for (resolveInfo in installers) {
+                    val packageName = resolveInfo.activityInfo.packageName
+                    context.grantUriPermission(packageName, contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
             }
 
             context.startActivity(installIntent)
         } catch (e: Exception) {
             Log.e("UpdateManager", "Failed to launch installer: ${e.message}")
-            Toast.makeText(context, "Installer failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Installer error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 }
