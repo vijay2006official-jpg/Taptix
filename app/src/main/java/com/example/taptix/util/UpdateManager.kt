@@ -7,7 +7,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import org.json.JSONObject
 import java.io.File
@@ -100,7 +102,7 @@ class UpdateManager(private val context: Context) {
                 var conn: HttpURLConnection
                 var redirectCount = 0
 
-                // Follow HTTP 301/302 redirects (required for GitHub Releases -> AWS/Azure CDN)
+                // Follow HTTP 301/302 redirects (required for GitHub Releases -> CDN)
                 while (true) {
                     val url = URL(currentUrl)
                     conn = (url.openConnection() as HttpURLConnection).apply {
@@ -171,6 +173,19 @@ class UpdateManager(private val context: Context) {
 
     fun launchApkInstaller(apkFile: File) {
         try {
+            // Check if app has permission to install unknown apps on Android 8.0+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+                Toast.makeText(context, "Please allow 'Install unknown apps' permission for Taptix", Toast.LENGTH_LONG).show()
+                val settingsIntent = Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}")
+                ).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(settingsIntent)
+                return
+            }
+
             val contentUri: Uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
@@ -179,11 +194,20 @@ class UpdateManager(private val context: Context) {
 
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(contentUri, "application/vnd.android.package-archive")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             }
+
+            // Explicitly grant read URI permission to all package installer handlers
+            val resInfoList = context.packageManager.queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (resolveInfo in resInfoList) {
+                val packageName = resolveInfo.activityInfo.packageName
+                context.grantUriPermission(packageName, contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
             context.startActivity(installIntent)
         } catch (e: Exception) {
             Log.e("UpdateManager", "Failed to launch installer: ${e.message}")
+            Toast.makeText(context, "Installer failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 }
