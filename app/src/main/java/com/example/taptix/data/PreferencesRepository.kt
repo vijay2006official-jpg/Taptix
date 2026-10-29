@@ -278,6 +278,6 @@ class PreferencesRepository(context: Context) {
         private const val KEY_AREA_GROUPS_JSON = "key_area_groups_json"
 
         private const val DEFAULT_TARGET_PACKAGES =
-            "com.ubercab.driver, com.olacabs.driver, com.olacabs.partner, com.rapido.captain, com.rapido.passenger, com.indriver, sinet.startup.inDriver, in.juspay.nammayatripartner, com.theporter.partner, me.lyft.driver, com.grabtaxi.driver2, com.dd.driver"
+            "com.ubercab.driver, com.olacabs.driver, com.olacabs.partner, com.rapido.captain, com.indriver, sinet.startup.inDriver, in.juspay.nammayatripartner, com.theporter.partner, me.lyft.driver, com.grabtaxi.driver2, com.dd.driver"
     }
 }

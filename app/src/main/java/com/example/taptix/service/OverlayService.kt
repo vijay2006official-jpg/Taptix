@@ -412,6 +412,19 @@ class OverlayService : Service() {
         }
         buttonRow.addView(micBtn, LinearLayout.LayoutParams(110, 110).apply { rightMargin = 8 })
 
+                // Minimize Button
+        val minBtn = Button(this).apply {
+            text = "➖"
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            background = createRoundBackground("#37474F", 14f)
+            setOnClickListener {
+                wakeUpFromDimming()
+                minimizeToBubble()
+            }
+        }
+        buttonRow.addView(minBtn, LinearLayout.LayoutParams(95, 110).apply { rightMargin = 8 })
+
         // Emergency Stop / Close Overlay Button
         val stopBtn = Button(this).apply {
             text = "✖"
@@ -614,7 +627,7 @@ class OverlayService : Service() {
         service.startClicking(targetPoints)
     }
 
-    private fun stopClickingSequence() {
+    fun stopClickingSequence() {
         isPlaying = false
         playPauseBtn?.text = "PLAY"
         playPauseBtn?.background = createRoundBackground("#2E7D32", 14f)

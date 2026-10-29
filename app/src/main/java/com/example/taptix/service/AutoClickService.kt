@@ -672,11 +672,7 @@ class AutoClickService : AccessibilityService() {
 
             // Ultra Mode: match any button-like node
 
-            listOf("ACCEPT", "CONFIRM", "GO", "TAKE", "RIDE", "OK", "YES", "START",
-
-                "CAPTAIN ACCEPT", "TAP TO ACCEPT", "SWIPE TO ACCEPT", "BOOKING",
-
-                "MATCH", "OFFER", "NEW RIDE", "RIDE REQUEST")
+            listOf("ACCEPT", "CONFIRM", "TAKE RIDE", "START DUTY", "CAPTAIN ACCEPT", "TAP TO ACCEPT", "SWIPE TO ACCEPT", "ACCEPT ORDER", "ACCEPT TRIP", "ACCEPT BOOKING", "ACCEPT OFFER")
 
         } else if (preset == PlatformPreset.CUSTOM) {
 
@@ -798,6 +794,17 @@ class AutoClickService : AccessibilityService() {
 
         val smartRules = prefsRepo.getSmartAcceptRules()
 
+        val targetAreasOn = prefsRepo.isTargetAreasEnabled()
+        val preferredAreas = prefsRepo.getSettings().preferredAreas
+        val effectiveRules = if (targetAreasOn && preferredAreas.isNotBlank()) {
+            smartRules.copy(
+                destinationFilterEnabled = true,
+                destinationKeywords = preferredAreas
+            )
+        } else {
+            smartRules
+        }
+
         val activeZones = if (settings.mapZoneEnabled) prefsRepo.getActiveZones() else emptyList()
 
         val driverLoc = getLastKnownLocation()
@@ -806,7 +813,7 @@ class AutoClickService : AccessibilityService() {
 
             offer = offer,
 
-            rules = smartRules,
+            rules = effectiveRules,
 
             activeZones = activeZones,
 
@@ -947,6 +954,13 @@ class AutoClickService : AccessibilityService() {
             )
 
             notifyRideAccepted()
+
+            if (settings.autoPauseOnAccept) {
+                setClickingActive(false)
+                OverlayService.instance?.let { ov ->
+                    mainHandler.post { ov.stopClickingSequence() }
+                }
+            }
 
             // Force 30-second pause after a successful accept to prevent rapid re-triggering
 
@@ -1093,27 +1107,7 @@ class AutoClickService : AccessibilityService() {
 
         }
 
-        // Update floating trip overlay
-
-        OverlayService.instance?.updateTripStatus(
-
-            com.example.taptix.model.TripStatusInfo(
-
-                phase = com.example.taptix.model.TripPhase.EN_ROUTE_PICKUP,
-
-                fare = "Active Ride",
-
-                distance = "Pickup",
-
-                etaMinutes = 5,
-
-                pickupAddress = "En Route to Passenger Location",
-
-                dropoffAddress = "Destination Address"
-
-            )
-
-        )
+        // Real-time accept toast and vibration delivered
 
     }
 

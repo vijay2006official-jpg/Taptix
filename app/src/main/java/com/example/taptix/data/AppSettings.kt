@@ -16,7 +16,7 @@ data class AppSettings(
     val ttsFeedbackEnabled: Boolean = true,
     val swipeDurationMs: Long = 350L,
     val autoLaunchForTargetAppsEnabled: Boolean = true,
-    val targetAppPackages: String = "com.ubercab.driver, me.lyft.driver, com.indriver, com.olacabs.driver, com.rapido.passenger, com.grabtaxi.driver2, com.dd.driver",
+    val targetAppPackages: String = "com.ubercab.driver, me.lyft.driver, com.indriver, com.olacabs.driver, com.rapido.captain, com.grabtaxi.driver2, com.dd.driver",
     val autoHideOnExit: Boolean = false,
     val voiceCommandsEnabled: Boolean = true,
     val nightModeAutoDimEnabled: Boolean = false,

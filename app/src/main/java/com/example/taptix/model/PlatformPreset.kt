@@ -16,9 +16,9 @@ enum class PlatformPreset(
         title = "Universal (All Duties)",
         keywords = listOf(
             "ACCEPT", "TAP TO ACCEPT", "ACCEPT TRIP", "ACCEPT RIDE", "ACCEPT ORDER",
-            "ACCEPT BOOKING", "ACCEPT DUTY", "CONFIRM", "CONFIRM RIDE", "SWIPE TO ACCEPT",
-            "MATCH", "CAPTAIN ACCEPT", "TAKE RIDE", "START DUTY", "TAKE DUTY",
-            "ACCEPT DELIVERY", "ACCEPT PARCEL", "ORDER REQUEST", "RIDE REQUEST", "NEW RIDE"
+            "ACCEPT BOOKING", "ACCEPT DUTY", "CONFIRM", "CONFIRM RIDE", "CONFIRM ORDER", "SWIPE TO ACCEPT",
+            "CAPTAIN ACCEPT", "TAKE RIDE", "START DUTY", "TAKE DUTY", "START TRIP",
+            "ACCEPT DELIVERY", "ACCEPT PARCEL", "ACCEPT OFFER", "MAKE OFFER"
         ),
         requiresSwipe = false
     ),
@@ -26,8 +26,8 @@ enum class PlatformPreset(
         id = "uber",
         title = "Uber Driver",
         keywords = listOf(
-            "ACCEPT", "TAP TO ACCEPT", "RIDE REQUEST", "ACCEPT TRIP", "MATCH", "ACCEPT OFFER",
-            "ACCEPT DELIVERY", "DELIVERY REQUEST"
+            "ACCEPT", "TAP TO ACCEPT", "ACCEPT TRIP", "ACCEPT RIDE", "ACCEPT OFFER",
+            "ACCEPT DELIVERY"
         ),
         requiresSwipe = false
     ),
@@ -35,7 +35,7 @@ enum class PlatformPreset(
         id = "ola",
         title = "Ola Partner",
         keywords = listOf(
-            "ACCEPT", "CONFIRM RIDE", "NEW RIDE", "RIDE REQUEST", "ACCEPT RIDE",
+            "ACCEPT", "CONFIRM RIDE", "ACCEPT RIDE",
             "ACCEPT DUTY", "TAKE DUTY", "START TRIP"
         ),
         requiresSwipe = false
@@ -45,14 +45,14 @@ enum class PlatformPreset(
         title = "Rapido Captain",
         keywords = listOf(
             "ACCEPT ORDER", "ACCEPT RIDE", "ACCEPT", "CAPTAIN ACCEPT", "SWIPE TO ACCEPT",
-            "NEW ORDER", "TAKE ORDER", "CONFIRM ORDER"
+            "TAKE ORDER", "CONFIRM ORDER"
         ),
         requiresSwipe = false
     ),
     INDRIVER(
         id = "indriver",
         title = "inDrive",
-        keywords = listOf("ACCEPT", "OFFER", "MAKE OFFER", "ACCEPT OFFER", "RAISE FARE"),
+        keywords = listOf("ACCEPT", "MAKE OFFER", "ACCEPT OFFER", "RAISE FARE"),
         requiresSwipe = false
     ),
     PORTER(

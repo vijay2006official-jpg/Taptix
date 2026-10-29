@@ -149,14 +149,15 @@ fun MapZoneScreen(
                     with(settings) {
                         javaScriptEnabled = true
                         domStorageEnabled = true
+                        databaseEnabled = true
                         loadWithOverviewMode = true
                         useWideViewPort = true
-                        builtInZoomControls = true
+                        builtInZoomControls = false
                         displayZoomControls = false
                         allowFileAccess = true
                         cacheMode = WebSettings.LOAD_DEFAULT
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                        userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                     }
                     webChromeClient = WebChromeClient()
                     webViewClient = WebViewClient()
@@ -175,7 +176,7 @@ fun MapZoneScreen(
                     }, "Android")
 
                     loadDataWithBaseURL(
-                        "https://tile.openstreetmap.org/",
+                        "https://mt1.google.com/",
                         buildMapHtml(
                             centerLat = pickedLat,
                             centerLng = pickedLng,
@@ -491,48 +492,92 @@ $cssBlock
 $jsBlock
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#F1F5F9; font-family:sans-serif; }
-  #map { width:100vw; height:100vh; }
+  html, body { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#E2E8F0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  #map { position:absolute; top:0; bottom:0; left:0; right:0; width:100%; height:100%; }
   .leaflet-popup-content-wrapper {
     background: #FFFFFF;
     color: #0F172A;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    padding: 2px;
+  }
+  .taptix-marker {
+    background: transparent;
+    border: none;
   }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <script>
-var map = L.map('map', {zoomControl:false, attributionControl:false})
-           .setView([$centerLat, $centerLng], 14);
+var map = L.map('map', {
+  zoomControl: false,
+  attributionControl: false,
+  maxZoom: 20
+}).setView([$centerLat, $centerLng], 15);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
+// Primary Layer: High-Resolution Google Maps Raster (full local street names, areas, landmarks)
+var googleLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+  subdomains: ['0', '1', '2', '3'],
+  maxZoom: 20,
   crossOrigin: true
 }).addTo(map);
+
+// Fallback to CartoDB Voyager if Google tiles ever fail
+googleLayer.on('tileerror', function() {
+  if (!map._hasCartoFallback) {
+    map._hasCartoFallback = true;
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+  }
+});
+
+var pinIcon = L.divIcon({
+  className: 'taptix-marker',
+  html: '<div style="position:relative; width:36px; height:36px;">' +
+        '<div style="position:absolute; width:34px; height:34px; background:#0066FF; border-radius:50% 50% 50% 0; transform:rotate(-45deg); border:3px solid #FFFFFF; box-shadow:0 4px 14px rgba(0,0,0,0.45); top:0; left:0;"></div>' +
+        '<div style="position:absolute; width:12px; height:12px; background:#FFFFFF; border-radius:50%; top:8px; left:11px;"></div>' +
+        '</div>',
+  iconSize: [36, 36],
+  iconAnchor: [18, 34],
+  popupAnchor: [0, -34]
+});
 
 var marker = null, circle = null;
 var radiusM = $radiusM;
 
 function fetchAddressAndPopup(lat, lng) {
-  var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng;
-  fetch(url, { headers: { 'Accept': 'application/json' } })
+  var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=18&addressdetails=1';
+  fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'TaptixDriverApp/2.2' } })
     .then(function(res) { return res.json(); })
     .then(function(data) {
-      var addr = data && data.display_name ? data.display_name : (lat.toFixed(4) + ', ' + lng.toFixed(4));
+      var addr = '';
+      if (data && data.address) {
+        var a = data.address;
+        var parts = [a.suburb || a.neighbourhood || a.road || a.city_district || a.quarter, a.city || a.town || a.county];
+        addr = parts.filter(Boolean).join(', ');
+      }
+      if (!addr && data && data.display_name) {
+        addr = data.display_name.split(',').slice(0, 3).join(',');
+      }
+      if (!addr) {
+        addr = lat.toFixed(4) + ', ' + lng.toFixed(4);
+      }
       if (marker) {
-        marker.bindPopup('<div style="font-size:12px; font-weight:600; line-height:16px;">' + addr + '</div>').openPopup();
+        marker.bindPopup('<div style="font-size:12px; font-weight:700; line-height:16px; color:#0F172A;">📍 ' + addr + '</div>').openPopup();
       }
       if (typeof Android !== 'undefined' && Android.onLocationPicked) {
         Android.onLocationPicked(lat, lng, addr);
       }
     })
     .catch(function() {
+      var fallback = lat.toFixed(4) + ', ' + lng.toFixed(4);
       if (typeof Android !== 'undefined' && Android.onLocationPicked) {
-        Android.onLocationPicked(lat, lng, '');
+        Android.onLocationPicked(lat, lng, fallback);
       }
     });
 }
@@ -541,7 +586,7 @@ function placeMarker(lat, lng) {
   if (marker) map.removeLayer(marker);
   if (circle) map.removeLayer(circle);
 
-  marker = L.marker([lat, lng]).addTo(map);
+  marker = L.marker([lat, lng], {icon: pinIcon}).addTo(map);
   circle = L.circle([lat, lng], {
     radius: radiusM,
     color: '#0066FF',
@@ -572,14 +617,14 @@ function updateRadius(r) {
 
 function searchAddress(query) {
   var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query);
-  fetch(url, { headers: { 'Accept': 'application/json' } })
+  fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'TaptixDriverApp/2.2' } })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data && data.length > 0) {
         var first = data[0];
         var lat = parseFloat(first.lat);
         var lon = parseFloat(first.lon);
-        map.setView([lat, lon], 14);
+        map.setView([lat, lon], 15);
         placeMarker(lat, lon);
       }
     });
@@ -587,6 +632,13 @@ function searchAddress(query) {
 
 map.on('click', function(e) { placeMarker(e.latlng.lat, e.latlng.lng); });
 map.on('contextmenu', function(e) { placeMarker(e.latlng.lat, e.latlng.lng); });
+
+setTimeout(function() {
+  map.invalidateSize();
+}, 300);
+window.addEventListener('resize', function() {
+  map.invalidateSize();
+});
 </script>
 </body>
 </html>"""
