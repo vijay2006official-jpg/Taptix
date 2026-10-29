@@ -100,7 +100,7 @@ fun MapZoneScreen(
         pickedLat = lat
         pickedLng = lng
         webViewRef?.evaluateJavascript(
-            "if(typeof map !== 'undefined'){ map.setView([$lat, $lng], 15); placeMarker($lat, $lng); }",
+            "if(typeof updateLocation === 'function'){ updateLocation($lat, $lng); } else if(typeof map !== 'undefined'){ map.setView([$lat, $lng], 15); placeMarker($lat, $lng); }",
             null
         )
     }
@@ -159,8 +159,18 @@ fun MapZoneScreen(
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                     }
-                    webChromeClient = WebChromeClient()
-                    webViewClient = WebViewClient()
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
+                            android.util.Log.d("MapZoneWebView", "${consoleMessage?.message()} (line ${consoleMessage?.lineNumber()})")
+                            return true
+                        }
+                    }
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            view?.evaluateJavascript("if (typeof forceResize === 'function') forceResize();", null)
+                        }
+                    }
 
                     addJavascriptInterface(object : Any() {
                         @JavascriptInterface
@@ -176,7 +186,7 @@ fun MapZoneScreen(
                     }, "Android")
 
                     loadDataWithBaseURL(
-                        "https://mt1.google.com/",
+                        "https://localhost/",
                         buildMapHtml(
                             centerLat = pickedLat,
                             centerLng = pickedLng,
@@ -492,8 +502,24 @@ $cssBlock
 $jsBlock
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#E2E8F0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-  #map { position:absolute; top:0; bottom:0; left:0; right:0; width:100%; height:100%; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #E5E7EB;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  #map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    min-height: 100%;
+    z-index: 1;
+  }
   .leaflet-popup-content-wrapper {
     background: #FFFFFF;
     color: #0F172A;
@@ -501,11 +527,19 @@ $jsBlock
     font-weight: 600;
     border-radius: 12px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-    padding: 2px;
+    padding: 4px;
   }
   .taptix-marker {
     background: transparent;
     border: none;
+  }
+  @keyframes gps-pulse {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    50% { transform: scale(1.6); opacity: 0.2; }
+    100% { transform: scale(0.9); opacity: 0.8; }
+  }
+  .gps-pulse-ring {
+    animation: gps-pulse 2.2s infinite ease-in-out;
   }
 </style>
 </head>
@@ -518,11 +552,10 @@ var map = L.map('map', {
   maxZoom: 20
 }).setView([$centerLat, $centerLng], 15);
 
-// Primary Layer: High-Resolution Google Maps Raster (full local street names, areas, landmarks)
-var googleLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+// Primary Layer: High-Resolution Google Maps Raster (full local street names, areas, landmarks in English & local script)
+var googleLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&hl=en&gl=in&x={x}&y={y}&z={z}', {
   subdomains: ['0', '1', '2', '3'],
-  maxZoom: 20,
-  crossOrigin: true
+  maxZoom: 20
 }).addTo(map);
 
 // Fallback to CartoDB Voyager if Google tiles ever fail
@@ -547,7 +580,7 @@ var pinIcon = L.divIcon({
   popupAnchor: [0, -34]
 });
 
-var marker = null, circle = null;
+var marker = null, circle = null, userGpsMarker = null;
 var radiusM = $radiusM;
 
 function fetchAddressAndPopup(lat, lng) {
@@ -598,7 +631,30 @@ function placeMarker(lat, lng) {
   fetchAddressAndPopup(lat, lng);
 }
 
-placeMarker($markerLat, $markerLng);
+function updateUserGpsLocation(lat, lng) {
+  if (userGpsMarker) {
+    userGpsMarker.setLatLng([lat, lng]);
+  } else {
+    var userIcon = L.divIcon({
+      className: 'taptix-marker',
+      html: '<div style="position:relative; width:28px; height:28px;">' +
+            '<div class="gps-pulse-ring" style="position:absolute; width:28px; height:28px; border-radius:50%; background:rgba(0,102,255,0.35);"></div>' +
+            '<div style="position:absolute; width:14px; height:14px; border-radius:50%; background:#0066FF; border:3px solid #FFFFFF; top:7px; left:7px; box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>' +
+            '</div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+    userGpsMarker = L.marker([lat, lng], {icon: userIcon, zIndexOffset: 1000}).addTo(map);
+  }
+}
+
+function updateLocation(lat, lng) {
+  if (typeof map !== 'undefined' && map) {
+    map.setView([lat, lng], 15);
+    placeMarker(lat, lng);
+    updateUserGpsLocation(lat, lng);
+  }
+}
 
 function updateRadius(r) {
   radiusM = r;
@@ -630,15 +686,24 @@ function searchAddress(query) {
     });
 }
 
+function forceResize() {
+  if (typeof map !== 'undefined' && map) {
+    map.invalidateSize();
+  }
+}
+
 map.on('click', function(e) { placeMarker(e.latlng.lat, e.latlng.lng); });
 map.on('contextmenu', function(e) { placeMarker(e.latlng.lat, e.latlng.lng); });
 
-setTimeout(function() {
-  map.invalidateSize();
-}, 300);
-window.addEventListener('resize', function() {
-  map.invalidateSize();
-});
+placeMarker($markerLat, $markerLng);
+updateUserGpsLocation($centerLat, $centerLng);
+
+window.addEventListener('load', forceResize);
+window.addEventListener('resize', forceResize);
+setTimeout(forceResize, 100);
+setTimeout(forceResize, 350);
+setTimeout(forceResize, 800);
+setTimeout(forceResize, 1500);
 </script>
 </body>
 </html>"""

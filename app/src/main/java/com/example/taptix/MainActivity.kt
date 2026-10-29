@@ -1033,7 +1033,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
 
-                                Text("Autonomous Captain Engine v2.1", fontSize = 10.sp, color = BrandCyan)
+                                Text("Autonomous Captain Engine v2.2", fontSize = 10.sp, color = BrandCyan)
 
 
 
