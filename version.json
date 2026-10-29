@@ -1,6 +1,6 @@
 {
-  "versionCode": 17,
+  "versionCode": 18,
   "versionName": "2.2",
-  "apkUrl": "https://github.com/vijay2006official-jpg/Taptix/releases/download/v2.2/Taptix-v2.2.apk",
-  "releaseNotes": "Taptix v2.2 Official Update:\n• Instant In-App APK Installer Handoff + 1-Tap 'Install Update Now' Recovery\n• Clean Dashboard Layout (Removed Duplicate Bottom Floating Dock Button)\n• Custom Tactile ON / OFF Mechanical Pill Button for Floating Dock\n• Google Maps HD Street & Local Language Tiles with Pulsing Blue GPS Dot"
+  "apkUrl": "https://github.com/vijay2006official-jpg/Taptix/releases/download/v2.2.18/Taptix-v2.2-build18.apk",
+  "releaseNotes": "Taptix v2.2 Official Update:\n• Instant Vivo/Android 14+ In-App Installer + 1-Tap 'Install Update Now' Button\n• Clean Dashboard Layout (Removed Duplicate Bottom Floating Dock Button)\n• Custom Tactile ON / OFF Mechanical Pill Button for Floating Dock\n• Google Maps HD Street & Local Language Tiles with Pulsing Blue GPS Dot"
 }
