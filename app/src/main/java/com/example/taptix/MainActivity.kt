@@ -727,6 +727,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
                     isServiceRunning = false
                 }
 
+                updateManager.resumePendingInstallIfPermitted { msg -> updateStatus = msg }
                 updateManager.checkForUpdate("https://raw.githubusercontent.com/vijay2006official-jpg/Taptix/main/version.json") { availableUpdate = it }
 
             }
@@ -1141,41 +1142,40 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
             if (availableUpdate != null) {
-
-
-
-                SmallUpdateCard(availableUpdate!!, updateProgress, updateStatus) {
-
-
-
-                    updateManager.downloadAndInstallApk(
-
-
-
-                        availableUpdate!!.apkUrl,
-
-
-
-                        onProgress = { p -> updateProgress = p / 100f },
-
-
-
-                        onComplete = { updateStatus = "Installing..." },
-
-
-
-                        onError    = { e -> updateStatus = "Error: $e" }
-
-
-
-                    )
-
-
-
-                }
-
-
-
+                SmallUpdateCard(
+                    info = availableUpdate!!,
+                    progress = updateProgress,
+                    statusText = updateStatus,
+                    onUpdate = {
+                        updateProgress = 0f
+                        updateStatus = "Downloading update... 0%"
+                        updateManager.downloadAndInstallApk(
+                            apkUrl = availableUpdate!!.apkUrl,
+                            onProgress = { p ->
+                                updateProgress = p / 100f
+                                if (p < 100) {
+                                    updateStatus = "Downloading update... ${p}%"
+                                }
+                            },
+                            onComplete = {
+                                updateProgress = 1f
+                                updateStatus = "Opening Android installer..."
+                            },
+                            onError = { e ->
+                                updateProgress = -1f
+                                updateStatus = "Error: $e"
+                            },
+                            onStatusChange = { msg ->
+                                updateStatus = msg
+                            }
+                        )
+                    },
+                    onInstallReady = {
+                        updateManager.installDownloadedApk { msg ->
+                            updateStatus = msg
+                        }
+                    }
+                )
             }
 
 
@@ -4753,129 +4753,117 @@ fun HowToSetupCard() {
 
 
 @Composable
-
-
-
 fun SmallUpdateCard(
-
-
-
-    info: UpdateInfo, progress: Float, statusText: String, onUpdate: () -> Unit
-
-
-
+    info: UpdateInfo,
+    progress: Float,
+    statusText: String,
+    onUpdate: () -> Unit,
+    onInstallReady: () -> Unit = onUpdate
 ) {
+    val isError = statusText.startsWith("Error", ignoreCase = true)
+    val isDownloading = progress in 0f..0.999f && !isError
+    val isDownloaded = progress >= 1f && !isError
 
-
-
-    Card(Modifier.fillMaxWidth(), RoundedCornerShape(16.dp),
-
-
-
-        CardDefaults.cardColors(Color(0xFF0D1A2E)),
-
-
-
-        CardDefaults.cardElevation(4.dp)) {
-
-
-
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1A2E)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
         Column(Modifier.padding(14.dp)) {
-
-
-
             Row(verticalAlignment = Alignment.CenterVertically) {
-
-
-
                 Text("🆕", fontSize = 18.sp)
-
-
-
                 Spacer(Modifier.width(8.dp))
-
-
-
                 Column(Modifier.weight(1f)) {
-
-
-
-                    Text("Update v${info.versionName} available",
-
-
-
-                        color = BrandCyan, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-
-
-
+                    Text(
+                        text = "Update v${info.versionName} available",
+                        color = BrandCyan,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
                     Text(info.releaseNotes, color = TextMuted, fontSize = 11.sp)
-
-
-
                 }
-
-
-
             }
-
-
 
             Spacer(Modifier.height(10.dp))
 
-
-
-            if (progress >= 0f) {
-
-
-
-                LinearProgressIndicator({ progress }, Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-
-
-
-                    color = BrandCyan, trackColor = DarkControl)
-
-
-
-                Spacer(Modifier.height(4.dp))
-
-
-
-                Text(statusText, color = TextMuted, fontSize = 11.sp)
-
-
-
-            } else {
-
-
-
-                Button(onClick = onUpdate, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-
-
-
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandCyan)) {
-
-
-
-                    Text("Download & Install", color = Color.Black, fontWeight = FontWeight.Bold)
-
-
-
+            when {
+                isDownloading -> {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(7.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = BrandCyan,
+                        trackColor = DarkControl
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = if (statusText.isNotBlank()) statusText else "Downloading... ${(progress * 100).toInt()}%",
+                        color = BrandCyan,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.5.sp
+                    )
                 }
 
+                isDownloaded -> {
+                    LinearProgressIndicator(
+                        progress = { 1f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(7.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = Color(0xFF00E676),
+                        trackColor = DarkControl
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = if (statusText.isNotBlank()) statusText else "Download complete — ready to install",
+                        color = Color(0xFFB9F6CA),
+                        fontSize = 11.5.sp
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = onInstallReady,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676))
+                    ) {
+                        Text(
+                            text = "📲 INSTALL UPDATE NOW",
+                            color = Color(0xFF031B14),
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
 
-
+                else -> {
+                    if (isError) {
+                        Text(
+                            text = statusText,
+                            color = Color(0xFFFF8A80),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Button(
+                        onClick = onUpdate,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandCyan)
+                    ) {
+                        Text(
+                            text = if (isError) "🔄 Retry Download & Install" else "Download & Install",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
-
-
-
         }
-
-
-
     }
-
-
-
 }
 
 @Composable
