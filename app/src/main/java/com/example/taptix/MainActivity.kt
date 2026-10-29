@@ -2130,42 +2130,6 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
 
-            // ── 12. LAUNCH / HIDE FLOATING CONTROLS
-            val isDockCurrentlyOn = appSettings.floatingDockEnabled && isOverlayOn
-
-            Button(
-                onClick = {
-                    toggleFloatingDock(!isDockCurrentlyOn)
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Box(
-                    Modifier.fillMaxSize().background(
-                        if (isDockCurrentlyOn)
-                            Brush.horizontalGradient(listOf(Color(0xFF991B1B), Color(0xFFDC2626)))
-                        else
-                            Brush.horizontalGradient(listOf(Color(0xFF0050CC), Color(0xFF0099FF), BrandCyan)),
-                        RoundedCornerShape(16.dp)
-                    ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (isDockCurrentlyOn) "✖" else "🚀", fontSize = 18.sp, color = Color.White)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (isDockCurrentlyOn) "HIDE FLOATING DOCK" else "ENABLE FLOATING DOCK",
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp,
-                            letterSpacing = 1.sp
-                        )
-                    }
-                }
-            }
-
             // ── HOW TO SETUP
 
 
