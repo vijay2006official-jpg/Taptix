@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
+  "versionCode": 14,
   "versionName": "2.2",
-  "apkUrl": "https://raw.githubusercontent.com/vijay2006official-jpg/Taptix/main/amazon_store_assets/Taptix-v2.2-amazon.apk",
-  "releaseNotes": "Taptix v2.2 Official Update:\n• Instant Floating Overlay Toggle Off Fix & Memory Release\n• Smart Map Zones with GPS Centering & Local Area Names\n• Pickup Distance Filter (Haversine GPS Engine)\n• Smart Acceptance Rules Engine with Rejection Diagnostics\n• Persistent Activity Audit Log with 7-Day Expiry\n• 1-Tap Home Screen Widget"
+  "apkUrl": "https://github.com/vijay2006official-jpg/Taptix/releases/download/v2.2/Taptix-v2.2.apk",
+  "releaseNotes": "Taptix v2.2 Official Update:\n• Dedicated 'Enable Floating Dock' ON/OFF Toggle Switch & Safe WindowManager Lifecycle\n• Google Maps HD Street & Local Language Tiles with Pulsing Blue GPS Dot\n• Instant Close (✖) Button UI Sync & Memory Release\n• Smart Map Zones, Target Areas & Pickup Distance Filter\n• Smart Acceptance Rules Engine & 1-Tap Home Screen Widget"
 }
