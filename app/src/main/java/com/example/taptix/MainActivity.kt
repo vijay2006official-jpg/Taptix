@@ -4921,54 +4921,194 @@ fun FloatingDockToggleCard(
     onToggle: (Boolean) -> Unit
 ) {
     val subtitle = when {
-        !hasOverlayPermission -> "Tap switch to grant 'Display over other apps' permission"
-        isEnabled -> "Floating control window active on screen (Tap ✖ on dock or toggle OFF to hide)"
-        else -> "Floating dock is hidden — toggle ON to display on-screen controls"
+        !hasOverlayPermission -> "Tap button to grant 'Display over other apps' permission"
+        isEnabled -> "Floating dock active on screen • Tap ✖ on dock or OFF button to hide"
+        else -> "Floating dock hidden • Tap ON button to show on-screen controls"
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isEnabled) Color(0xFF0A1828) else DarkCard
+            containerColor = if (isEnabled) Color(0xFF091B2A) else Color(0xFF121622)
         ),
         border = if (isEnabled)
-            androidx.compose.foundation.BorderStroke(1.5.dp, BrandCyan)
+            androidx.compose.foundation.BorderStroke(1.8.dp, Color(0xFF00E5FF))
         else
-            androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2230))
+            androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFF283044))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(horizontal = 18.dp, vertical = 18.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(
-                    text = "Enable Floating Dock",
-                    fontWeight = FontWeight.ExtraBold,
-                    color = if (isEnabled) BrandCyan else Color.White,
-                    fontSize = 16.sp,
-                    letterSpacing = 0.3.sp
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isEnabled)
+                                Brush.linearGradient(listOf(Color(0xFF00C853), Color(0xFF00B0FF)))
+                            else
+                                Brush.linearGradient(listOf(Color(0xFF1E2436), Color(0xFF2A324A)))
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isEnabled) Color(0xFF80D8FF) else Color(0xFF3B4561),
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isEnabled) "🎛️" else "🪟",
+                        fontSize = 19.sp
+                    )
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = "Enable Floating Dock",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isEnabled) Color(0xFF00E5FF) else Color.White,
+                        fontSize = 15.sp,
+                        letterSpacing = 0.3.sp
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = subtitle,
+                        color = if (isEnabled) Color(0xFFB2EBF2) else Color(0xFF94A3B8),
+                        fontSize = 11.5.sp,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            LabeledMechanicalPillButton(
+                isOn = isEnabled,
+                onToggle = { onToggle(!isEnabled) }
+            )
+        }
+    }
+}
+
+@Composable
+fun LabeledMechanicalPillButton(
+    isOn: Boolean,
+    onToggle: () -> Unit
+) {
+    val thumbOffset by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (isOn) 54.dp else 5.dp,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "dockPillThumbOffset"
+    )
+
+    val borderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isOn) Color(0xFF69F0AE) else Color(0xFF475569),
+        animationSpec = tween(durationMillis = 240),
+        label = "dockPillBorder"
+    )
+
+    val pulseTransition = rememberInfiniteTransition(label = "dockLedPulse")
+    val ledScale by pulseTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(850, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dockLedScale"
+    )
+
+    val pillShape = RoundedCornerShape(24.dp)
+
+    Box(
+        modifier = Modifier
+            .width(96.dp)
+            .height(46.dp)
+            .then(
+                if (isOn) Modifier.clip(pillShape) else Modifier.clip(pillShape)
+            )
+            .background(
+                brush = if (isOn) {
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF00C853), Color(0xFF00E676), Color(0xFF00B0FF))
+                    )
+                } else {
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF0F131D), Color(0xFF1E2536))
+                    )
+                },
+                shape = pillShape
+            )
+            .border(width = 2.dp, color = borderColor, shape = pillShape)
+            .clickable { onToggle() }
+    ) {
+        // Bold "ON" or "OFF" Mechanical Engraved Label
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = if (isOn) 14.dp else 42.dp,
+                    end = if (isOn) 42.dp else 10.dp
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (isOn) "ON" else "OFF",
+                fontWeight = FontWeight.Black,
+                fontSize = 13.5.sp,
+                letterSpacing = 1.4.sp,
+                color = if (isOn) Color(0xFF031B14) else Color(0xFFCBD5E1)
+            )
+        }
+
+        // Sliding Mechanical Cap with Animated LED Indicator Dot
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset, y = 5.dp)
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(
+                    brush = if (isOn) {
+                        Brush.verticalGradient(listOf(Color(0xFFFFFFFF), Color(0xFFE2E8F0)))
+                    } else {
+                        Brush.verticalGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
+                    }
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = subtitle,
-                    color = if (isEnabled) BrandCyan.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.6f),
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
+                .border(
+                    width = 1.5.dp,
+                    color = if (isOn) Color(0xFF00E676) else Color(0xFF64748B),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            // Outer LED glow ring when ON
+            if (isOn) {
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .scale(ledScale)
+                        .clip(CircleShape)
+                        .background(Color(0xFF00C853).copy(alpha = 0.28f))
                 )
             }
-            Switch(
-                checked = isEnabled,
-                onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = BrandCyan,
-                    uncheckedThumbColor = Color(0xFF444455),
-                    uncheckedTrackColor = Color(0xFF1E2230)
-                )
+            // Core LED indicator dot
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .scale(if (isOn) ledScale else 1f)
+                    .clip(CircleShape)
+                    .background(if (isOn) Color(0xFF00C853) else Color(0xFFEF4444))
             )
         }
     }

@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
+  "versionCode": 15,
   "versionName": "2.2",
   "apkUrl": "https://github.com/vijay2006official-jpg/Taptix/releases/download/v2.2/Taptix-v2.2.apk",
-  "releaseNotes": "Taptix v2.2 Official Update:\n• Dedicated 'Enable Floating Dock' ON/OFF Toggle Switch & Safe WindowManager Lifecycle\n• Google Maps HD Street & Local Language Tiles with Pulsing Blue GPS Dot\n• Instant Close (✖) Button UI Sync & Memory Release\n• Smart Map Zones, Target Areas & Pickup Distance Filter\n• Smart Acceptance Rules Engine & 1-Tap Home Screen Widget"
+  "releaseNotes": "Taptix v2.2 Official Update:\n• Custom Tactile ON / OFF Mechanical Pill Button for Floating Dock\n• Safe WindowManager Show/Hide Lifecycle & Instant Close (✖) Sync\n• Google Maps HD Street & Local Language Tiles with Pulsing Blue GPS Dot\n• Smart Map Zones, Target Areas & Pickup Distance Filter\n• Smart Acceptance Rules Engine & 1-Tap Home Screen Widget"
 }
