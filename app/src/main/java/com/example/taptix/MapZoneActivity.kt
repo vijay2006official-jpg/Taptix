@@ -86,19 +86,24 @@ fun MapZoneScreen(
 ) {
     val context = LocalContext.current
     val zones = remember { prefsRepo.getMapZones() }
+    val initialZone = remember { zones.firstOrNull() }
 
-    var pickedLat by remember { mutableStateOf(13.0827) }
-    var pickedLng by remember { mutableStateOf(80.2707) }
-    var radiusKm by remember { mutableStateOf(2.0f) }
+    var pickedLat by remember { mutableStateOf(initialZone?.lat ?: 13.0827) }
+    var pickedLng by remember { mutableStateOf(initialZone?.lng ?: 80.2707) }
+    var radiusKm by remember { mutableStateOf(initialZone?.radiusKm?.toFloat() ?: 2.0f) }
     var pickedAddress by remember { mutableStateOf("Locating your area...") }
     var searchQuery by remember { mutableStateOf("") }
     var currentSpeedKmh by remember { mutableStateOf(0) }
+    var userGpsLat by remember { mutableStateOf<Double?>(null) }
+    var userGpsLng by remember { mutableStateOf<Double?>(null) }
 
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     val updateMapLocation = { lat: Double, lng: Double ->
         pickedLat = lat
         pickedLng = lng
+        userGpsLat = lat
+        userGpsLng = lng
         webViewRef?.evaluateJavascript(
             "if(typeof updateLocation === 'function'){ updateLocation($lat, $lng); } else if(typeof map !== 'undefined'){ map.setView([$lat, $lng], 15); placeMarker($lat, $lng); }",
             null
@@ -125,13 +130,6 @@ fun MapZoneScreen(
     }
 
     LaunchedEffect(Unit) {
-        val first = zones.firstOrNull()
-        if (first != null) {
-            pickedLat = first.lat
-            pickedLng = first.lng
-            radiusKm = first.radiusKm.toFloat()
-        }
-
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) {
@@ -146,6 +144,10 @@ fun MapZoneScreen(
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
                     with(settings) {
                         javaScriptEnabled = true
                         domStorageEnabled = true
@@ -168,7 +170,17 @@ fun MapZoneScreen(
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            view?.evaluateJavascript("if (typeof forceResize === 'function') forceResize();", null)
+                            val syncJs = buildString {
+                                append("if (typeof forceResize === 'function') forceResize();")
+                                append("if (typeof updateRadius === 'function') updateRadius(${(radiusKm * 1000).toInt()});")
+                                append("if (typeof updateLocation === 'function') updateLocation($pickedLat, $pickedLng);")
+                                val gLat = userGpsLat
+                                val gLng = userGpsLng
+                                if (gLat != null && gLng != null) {
+                                    append("if (typeof updateUserGpsLocation === 'function') updateUserGpsLocation($gLat, $gLng);")
+                                }
+                            }
+                            view?.evaluateJavascript(syncJs, null)
                         }
                     }
 
@@ -176,10 +188,12 @@ fun MapZoneScreen(
                         @JavascriptInterface
                         fun onLocationPicked(lat: Double, lng: Double, address: String?) {
                             if (lat in -90.0..90.0 && lng in -180.0..180.0) {
-                                pickedLat = lat
-                                pickedLng = lng
-                                if (!address.isNullOrBlank()) {
-                                    pickedAddress = address
+                                Handler(Looper.getMainLooper()).post {
+                                    pickedLat = lat
+                                    pickedLng = lng
+                                    if (!address.isNullOrBlank()) {
+                                        pickedAddress = address
+                                    }
                                 }
                             }
                         }
@@ -555,7 +569,8 @@ var map = L.map('map', {
 // Primary Layer: High-Resolution Google Maps Raster (full local street names, areas, landmarks in English & local script)
 var googleLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&hl=en&gl=in&x={x}&y={y}&z={z}', {
   subdomains: ['0', '1', '2', '3'],
-  maxZoom: 20
+  maxZoom: 20,
+  crossOrigin: false
 }).addTo(map);
 
 // Fallback to CartoDB Voyager if Google tiles ever fail
@@ -564,7 +579,8 @@ googleLayer.on('tileerror', function() {
     map._hasCartoFallback = true;
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd',
-      maxZoom: 19
+      maxZoom: 19,
+      crossOrigin: false
     }).addTo(map);
   }
 });
@@ -585,7 +601,7 @@ var radiusM = $radiusM;
 
 function fetchAddressAndPopup(lat, lng) {
   var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=18&addressdetails=1';
-  fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'TaptixDriverApp/2.2' } })
+  fetch(url, { headers: { 'Accept': 'application/json' } })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       var addr = '';
@@ -673,7 +689,7 @@ function updateRadius(r) {
 
 function searchAddress(query) {
   var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query);
-  fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'TaptixDriverApp/2.2' } })
+  fetch(url, { headers: { 'Accept': 'application/json' } })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data && data.length > 0) {
@@ -688,7 +704,7 @@ function searchAddress(query) {
 
 function forceResize() {
   if (typeof map !== 'undefined' && map) {
-    map.invalidateSize();
+    map.invalidateSize(true);
   }
 }
 
@@ -698,6 +714,9 @@ map.on('contextmenu', function(e) { placeMarker(e.latlng.lat, e.latlng.lng); });
 placeMarker($markerLat, $markerLng);
 updateUserGpsLocation($centerLat, $centerLng);
 
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(forceResize).observe(document.getElementById('map'));
+}
 window.addEventListener('load', forceResize);
 window.addEventListener('resize', forceResize);
 setTimeout(forceResize, 100);
