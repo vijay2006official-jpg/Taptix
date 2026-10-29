@@ -57,6 +57,7 @@ class PreferencesRepository(context: Context) {
         val negativeKeywords = prefs.getString(KEY_NEGATIVE_KEYWORDS, "CASH, LOW RATING, SHARED") ?: "CASH, LOW RATING, SHARED"
         val preferredAreas = prefs.getString(KEY_PREFERRED_AREAS, "") ?: ""
         val targetAreasOn = prefs.getBoolean(KEY_TARGET_AREAS_ENABLED, false)
+        val floatingDockOn = prefs.getBoolean(KEY_FLOATING_DOCK_ENABLED, false)
 
         return AppSettings(
             clickIntervalMs = interval,
@@ -83,7 +84,8 @@ class PreferencesRepository(context: Context) {
             mapZoneRadiusKm = mapZoneRadius,
             vibrationOnAccept = vibrationOn,
             negativeKeywords = negativeKeywords,
-            preferredAreas = preferredAreas
+            preferredAreas = preferredAreas,
+            floatingDockEnabled = floatingDockOn
         )
     }
 
@@ -209,6 +211,17 @@ class PreferencesRepository(context: Context) {
     fun isTargetAreasEnabled(): Boolean = prefs.getBoolean(KEY_TARGET_AREAS_ENABLED, false)
     fun saveTargetAreasEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_TARGET_AREAS_ENABLED, enabled).apply()
 
+    fun isFloatingDockEnabled(): Boolean = prefs.getBoolean(KEY_FLOATING_DOCK_ENABLED, false)
+    fun saveFloatingDockEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_FLOATING_DOCK_ENABLED, enabled).apply()
+
+    fun registerOnChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+    }
+
+    fun unregisterOnChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+    }
+
     // --- Basic Setters ---
 
     fun saveClickInterval(intervalMs: Long) = prefs.edit().putLong(KEY_INTERVAL, intervalMs).apply()
@@ -261,7 +274,8 @@ class PreferencesRepository(context: Context) {
         private const val KEY_PIXEL_SHIFT = "key_pixel_shift"
         private const val KEY_AUTO_PAUSE_KEYBOARD = "key_auto_pause_keyboard"
 
-        private const val KEY_MASTER_CONTROL = "key_master_control"
+        const val KEY_MASTER_CONTROL = "key_master_control"
+        const val KEY_FLOATING_DOCK_ENABLED = "is_floating_dock_enabled"
         private const val KEY_ULTRA_MODE = "key_ultra_mode"
         private const val KEY_MAP_ZONE_ENABLED = "key_map_zone_enabled"
         private const val KEY_MAP_ZONE_LAT = "key_map_zone_lat"

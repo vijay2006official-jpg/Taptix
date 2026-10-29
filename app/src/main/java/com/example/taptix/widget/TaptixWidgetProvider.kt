@@ -7,7 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import android.widget.RemoteViews
 import com.example.taptix.MainActivity
@@ -46,17 +46,14 @@ class TaptixWidgetProvider : AppWidgetProvider() {
             prefs.saveMasterControl(newState)
 
             if (newState) {
-                if (android.provider.Settings.canDrawOverlays(context)) {
-                    val overlayIntent = Intent(context, OverlayService::class.java)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(overlayIntent)
-                    } else {
-                        context.startService(overlayIntent)
-                    }
+                if (currentSettings.floatingDockEnabled && Settings.canDrawOverlays(context)) {
+                    OverlayService.showService(context)
                 }
                 AutoClickService.instance?.setClickingActive(true)
+                OverlayService.syncMasterState(context, true)
             } else {
-                context.stopService(Intent(context, OverlayService::class.java)); AutoClickService.instance?.setClickingActive(false)
+                AutoClickService.instance?.setClickingActive(false)
+                OverlayService.syncMasterState(context, false)
             }
 
             notifyStateChanged(context)

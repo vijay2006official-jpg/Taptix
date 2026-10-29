@@ -1,4 +1,4 @@
-﻿package com.example.taptix.service
+package com.example.taptix.service
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -28,7 +29,6 @@ import com.example.taptix.MainActivity
 import com.example.taptix.R
 import com.example.taptix.data.PreferencesRepository
 import com.example.taptix.model.OperatingMode
-import com.example.taptix.model.PlatformPreset
 import com.example.taptix.model.TargetPoint
 import com.example.taptix.model.TripPhase
 import com.example.taptix.model.TripStatusInfo
@@ -101,14 +101,16 @@ class OverlayService : Service() {
         prefsRepo = PreferencesRepository(this)
         ttsManager = TtsManager(this)
 
-        if (!prefsRepo.getSettings().masterControlEnabled) {
-            Log.d(TAG, "Master control disabled, stopping OverlayService immediately")
-            closeOverlayCompletely()
+        // Must enter foreground before returning on Android 8+
+        startForegroundServiceNotification()
+
+        if (!prefsRepo.isFloatingDockEnabled() || !Settings.canDrawOverlays(this)) {
+            Log.d(TAG, "Floating dock disabled or overlay permission missing, stopping OverlayService")
+            closeOverlayCompletely(updateDockPref = !Settings.canDrawOverlays(this))
             return
         }
 
-        startForegroundServiceNotification()
-        setupFloatingToolbar()
+        showOverlay()
         setupVoiceControl()
 
         val settings = prefsRepo.getSettings()
@@ -119,20 +121,17 @@ class OverlayService : Service() {
             motionDetector?.start()
         }
 
-        // Initialize default target point ONLY for manual tap modes (Single Target, Multi Target)
-        if (settings.operatingMode != OperatingMode.SMART_ACCEPT) {
-            addTargetMarker(x = 500, y = 800)
-        }
-
         // Start Auto-Dim Idle Timer if enabled
         resetAutoDimTimer()
 
-        // Automatically activate Auto-Accept engine ONLY if Master Control is active
+        // Sync initial play/pause state with Master Control
         Handler(Looper.getMainLooper()).postDelayed({
             if (prefsRepo.getSettings().masterControlEnabled) {
                 startClickingSequence()
+            } else {
+                stopClickingSequence()
             }
-        }, 500L)
+        }, 350L)
     }
 
     private fun setupVoiceControl() {
@@ -156,6 +155,7 @@ class OverlayService : Service() {
                 AutoClickService.instance?.triggerVoiceDecline()
             }
             VoiceCommand.START -> {
+                prefsRepo.saveMasterControl(true)
                 startClickingSequence()
             }
             VoiceCommand.STOP -> {
@@ -167,18 +167,26 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val masterEnabled = prefsRepo.getSettings().masterControlEnabled
-
-        if (intent?.action == ACTION_STOP_SERVICE || !masterEnabled) {
-            closeOverlayCompletely()
+        if (intent?.action == ACTION_STOP_SERVICE ||
+            !prefsRepo.isFloatingDockEnabled() ||
+            !Settings.canDrawOverlays(this)
+        ) {
+            closeOverlayCompletely(updateDockPref = false)
             return START_NOT_STICKY
         }
 
-        expandFromBubble()
+        showOverlay()
 
         when (intent?.action) {
             ACTION_UPDATE_TRIP -> {
                 wakeUpFromDimming()
+            }
+            ACTION_SYNC_MASTER -> {
+                if (prefsRepo.getSettings().masterControlEnabled) {
+                    startClickingSequence()
+                } else {
+                    stopClickingSequence()
+                }
             }
         }
         return START_NOT_STICKY
@@ -190,15 +198,69 @@ class OverlayService : Service() {
         super.onDestroy()
         dimHandler.removeCallbacks(autoDimRunnable)
         dimHandler.removeCallbacks(pixelShiftRunnable)
-        stopClickingSequence()
         motionDetector?.stop()
         voiceManager?.shutdown()
-        removeFloatingToolbar()
-        removeAllTargetMarkers()
-        removeBubbleView()
+        hideOverlay()
         ttsManager?.shutdown()
         instance = null
         Log.d(TAG, "OverlayService destroyed")
+    }
+
+    // --- Safe WindowManager Lifecycle Methods (showOverlay / hideOverlay) ---
+
+    fun showOverlay() {
+        if (!Settings.canDrawOverlays(this)) return
+
+        if (isMinimized) {
+            expandFromBubble()
+        }
+
+        val existingToolbar = toolbarView
+        val existingParams = toolbarParams
+        if (existingToolbar == null) {
+            setupFloatingToolbar()
+        } else if (!existingToolbar.isAttachedToWindow && existingParams != null) {
+            safeAddView(existingToolbar, existingParams)
+        }
+        toolbarView?.visibility = View.VISIBLE
+
+        val settings = prefsRepo.getSettings()
+        if (settings.operatingMode != OperatingMode.SMART_ACCEPT && targetViews.isEmpty()) {
+            addTargetMarker(x = 500, y = 800)
+        }
+    }
+
+    fun hideOverlay() {
+        removeFloatingToolbar()
+        removeAllTargetMarkers()
+        removeBubbleView()
+        isMinimized = false
+    }
+
+    private fun safeAddView(view: View, params: WindowManager.LayoutParams) {
+        if (view.isAttachedToWindow) return
+        try {
+            windowManager.addView(view, params)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to attach overlay view to WindowManager", e)
+        }
+    }
+
+    private fun safeRemoveView(view: View?) {
+        if (view == null) return
+        try {
+            if (view.isAttachedToWindow) {
+                windowManager.removeViewImmediate(view)
+            }
+        } catch (_: IllegalArgumentException) {
+            // View already detached from WindowManager
+        } catch (_: Exception) {
+            try {
+                if (view.isAttachedToWindow) {
+                    windowManager.removeView(view)
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     // --- Foreground Notification Setup ---
@@ -316,7 +378,9 @@ class OverlayService : Service() {
                     MotionEvent.ACTION_MOVE -> {
                         layoutParams.x = initialX + (event.rawX - initialTouchX).toInt()
                         layoutParams.y = initialY + (event.rawY - initialTouchY).toInt()
-                        windowManager.updateViewLayout(container, layoutParams)
+                        if (container.isAttachedToWindow) {
+                            try { windowManager.updateViewLayout(container, layoutParams) } catch (_: Exception) {}
+                        }
                         return true
                     }
                 }
@@ -325,9 +389,10 @@ class OverlayService : Service() {
         })
 
         // Status Label
+        val masterActive = prefsRepo.getSettings().masterControlEnabled
         statusTv = TextView(this).apply {
-            text = "🟢 AUTO-ACCEPT: ACTIVE"
-            setTextColor(Color.parseColor("#00E676"))
+            text = if (masterActive) "🟢 AUTO-ACCEPT: ACTIVE" else "STATUS: PAUSED"
+            setTextColor(if (masterActive) Color.parseColor("#00E676") else Color.YELLOW)
             textSize = 11f
             gravity = Gravity.CENTER
             setPadding(0, 4, 0, 8)
@@ -342,10 +407,10 @@ class OverlayService : Service() {
 
         // Play/Pause Button
         playPauseBtn = Button(this).apply {
-            text = "PAUSE"
+            text = if (masterActive) "PAUSE" else "PLAY"
             textSize = 12f
             setTextColor(Color.WHITE)
-            background = createRoundBackground("#D84315", 14f)
+            background = createRoundBackground(if (masterActive) "#D84315" else "#2E7D32", 14f)
             setOnClickListener {
                 wakeUpFromDimming()
                 togglePlayPause()
@@ -412,7 +477,7 @@ class OverlayService : Service() {
         }
         buttonRow.addView(micBtn, LinearLayout.LayoutParams(110, 110).apply { rightMargin = 8 })
 
-                // Minimize Button
+        // Minimize Button
         val minBtn = Button(this).apply {
             text = "➖"
             textSize = 14f
@@ -425,14 +490,14 @@ class OverlayService : Service() {
         }
         buttonRow.addView(minBtn, LinearLayout.LayoutParams(95, 110).apply { rightMargin = 8 })
 
-        // Emergency Stop / Close Overlay Button
+        // Close Overlay Button (✖) -> persists is_floating_dock_enabled = false & hides dock
         val stopBtn = Button(this).apply {
             text = "✖"
             textSize = 14f
             setTextColor(Color.WHITE)
             background = createRoundBackground("#C62828", 14f)
             setOnClickListener {
-                closeOverlayCompletely()
+                closeOverlayCompletely(updateDockPref = true)
             }
         }
         buttonRow.addView(stopBtn, LinearLayout.LayoutParams(95, 110))
@@ -440,7 +505,7 @@ class OverlayService : Service() {
         container.addView(buttonRow)
 
         toolbarView = container
-        windowManager.addView(container, layoutParams)
+        safeAddView(container, layoutParams)
     }
 
     private fun minimizeToBubble() {
@@ -512,7 +577,9 @@ class OverlayService : Service() {
                     MotionEvent.ACTION_MOVE -> {
                         params.x = initialX + (event.rawX - initialTouchX).toInt()
                         params.y = initialY + (event.rawY - initialTouchY).toInt()
-                        windowManager.updateViewLayout(bubble, params)
+                        if (bubble.isAttachedToWindow) {
+                            try { windowManager.updateViewLayout(bubble, params) } catch (_: Exception) {}
+                        }
                         return true
                     }
                 }
@@ -521,23 +588,21 @@ class OverlayService : Service() {
         })
 
         bubbleView = bubble
-        windowManager.addView(bubble, params)
+        safeAddView(bubble, params)
     }
 
     private fun removeBubbleView() {
         bubbleView?.let {
-            try { windowManager.removeViewImmediate(it) } catch (_: Exception) {}
+            safeRemoveView(it)
             bubbleView = null
         }
     }
 
-    fun closeOverlayCompletely() {
-        prefsRepo.saveMasterControl(false)
-        AutoClickService.instance?.setClickingActive(false)
-        stopClickingSequence()
-        removeFloatingToolbar()
-        removeAllTargetMarkers()
-        removeBubbleView()
+    fun closeOverlayCompletely(updateDockPref: Boolean = true) {
+        if (updateDockPref) {
+            prefsRepo.saveFloatingDockEnabled(false)
+        }
+        hideOverlay()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -552,11 +617,7 @@ class OverlayService : Service() {
 
     private fun removeFloatingToolbar() {
         toolbarView?.let {
-            try {
-                windowManager.removeViewImmediate(it)
-            } catch (e: Exception) {
-                try { windowManager.removeView(it) } catch (_: Exception) {}
-            }
+            safeRemoveView(it)
             toolbarView = null
         }
     }
@@ -565,10 +626,15 @@ class OverlayService : Service() {
 
     private fun togglePlayPause() {
         if (isPlaying) {
+            prefsRepo.saveMasterControl(false)
+            AutoClickService.instance?.setClickingActive(false)
             stopClickingSequence()
         } else {
+            prefsRepo.saveMasterControl(true)
+            AutoClickService.instance?.setClickingActive(true)
             startClickingSequence()
         }
+        TaptixWidgetProvider.notifyStateChanged(this)
     }
 
     private fun toggleGestureAutomationMode() {
@@ -582,8 +648,8 @@ class OverlayService : Service() {
 
         if (isAuto) {
             targetViews.forEach { it.visibility = View.GONE }
-            statusTv?.text = "🟢 AUTO-ACCEPT: ACTIVE"
-            statusTv?.setTextColor(Color.parseColor("#00E676"))
+            statusTv?.text = if (isPlaying) "🟢 AUTO-ACCEPT: ACTIVE" else "STATUS: PAUSED"
+            statusTv?.setTextColor(if (isPlaying) Color.parseColor("#00E676") else Color.YELLOW)
         } else {
             if (targetPoints.isEmpty()) addTargetMarker(500, 800)
             targetViews.forEach { it.visibility = View.VISIBLE }
@@ -597,7 +663,7 @@ class OverlayService : Service() {
         }
     }
 
-    private fun startClickingSequence() {
+    fun startClickingSequence() {
         if (isMotionLocked) {
             statusTv?.text = "LOCKED: DRIVING"
             ttsManager?.speak("Cannot start auto clicker while driving")
@@ -690,7 +756,9 @@ class OverlayService : Service() {
                     MotionEvent.ACTION_MOVE -> {
                         layoutParams.x = initialX + (event.rawX - initialTouchX).toInt()
                         layoutParams.y = initialY + (event.rawY - initialTouchY).toInt()
-                        windowManager.updateViewLayout(markerContainer, layoutParams)
+                        if (markerContainer.isAttachedToWindow) {
+                            try { windowManager.updateViewLayout(markerContainer, layoutParams) } catch (_: Exception) {}
+                        }
 
                         point.x = layoutParams.x + 60
                         point.y = layoutParams.y + 60
@@ -706,24 +774,20 @@ class OverlayService : Service() {
         }
 
         targetViews.add(markerContainer)
-        windowManager.addView(markerContainer, layoutParams)
+        safeAddView(markerContainer, layoutParams)
     }
 
     private fun removeLastTargetMarker() {
         if (targetViews.isNotEmpty()) {
             val lastView = targetViews.removeAt(targetViews.size - 1)
             targetPoints.removeAt(targetPoints.size - 1)
-            try {
-                windowManager.removeViewImmediate(lastView)
-            } catch (_: Exception) {}
+            safeRemoveView(lastView)
         }
     }
 
     private fun removeAllTargetMarkers() {
         targetViews.forEach { view ->
-            try {
-                windowManager.removeViewImmediate(view)
-            } catch (_: Exception) {}
+            safeRemoveView(view)
         }
         targetViews.clear()
         targetPoints.clear()
@@ -807,7 +871,9 @@ class OverlayService : Service() {
             params.x = (params.x + shiftX).coerceIn(0, 1000)
             params.y = (params.y + shiftY).coerceIn(0, 2000)
             toolbarView?.let { v ->
-                try { windowManager.updateViewLayout(v, params) } catch (_: Exception) {}
+                if (v.isAttachedToWindow) {
+                    try { windowManager.updateViewLayout(v, params) } catch (_: Exception) {}
+                }
             }
         }
         dimHandler.postDelayed(pixelShiftRunnable, 60000L)
@@ -836,18 +902,43 @@ class OverlayService : Service() {
         private const val NOTIFICATION_ID = 1001
         const val ACTION_STOP_SERVICE = "com.example.taptix.ACTION_STOP_SERVICE"
         const val ACTION_UPDATE_TRIP = "com.example.taptix.ACTION_UPDATE_TRIP"
+        const val ACTION_SYNC_MASTER = "com.example.taptix.ACTION_SYNC_MASTER"
 
         @Volatile
         var instance: OverlayService? = null
             private set
 
-        fun stopService(context: Context) {
-            val intent = Intent(context, OverlayService::class.java).apply {
-                action = ACTION_STOP_SERVICE
+        fun showService(context: Context) {
+            if (!Settings.canDrawOverlays(context)) return
+            PreferencesRepository(context).saveFloatingDockEnabled(true)
+            val intent = Intent(context, OverlayService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
             }
-            try { context.startService(intent) } catch (_: Exception) {}
-            try { context.stopService(intent) } catch (_: Exception) {}
-            instance?.closeOverlayCompletely()
+            instance?.showOverlay()
+        }
+
+        fun hideService(context: Context) {
+            PreferencesRepository(context).saveFloatingDockEnabled(false)
+            instance?.closeOverlayCompletely(updateDockPref = false)
+            try {
+                context.stopService(Intent(context, OverlayService::class.java))
+            } catch (_: Exception) {}
+        }
+
+        fun syncMasterState(context: Context, masterEnabled: Boolean) {
+            val active = instance
+            if (active != null) {
+                if (masterEnabled) active.startClickingSequence() else active.stopClickingSequence()
+            } else if (masterEnabled && PreferencesRepository(context).isFloatingDockEnabled() && Settings.canDrawOverlays(context)) {
+                showService(context)
+            }
+        }
+
+        fun stopService(context: Context) {
+            hideService(context)
         }
     }
 }

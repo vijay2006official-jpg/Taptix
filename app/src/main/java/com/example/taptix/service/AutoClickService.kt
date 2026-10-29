@@ -256,15 +256,14 @@ class AutoClickService : AccessibilityService() {
 
             lastAutoLaunchedPackage = packageName
 
-            Log.d(TAG, "Detected target ride-hailing app: $packageName. Auto-launching Taptix Overlay...")
+            val currentSettings = prefsRepo.getSettings()
+            if (currentSettings.floatingDockEnabled && currentSettings.masterControlEnabled && Settings.canDrawOverlays(this)) {
 
-            if (Settings.canDrawOverlays(this)) {
+                Log.d(TAG, "Detected target ride-hailing app: $packageName. Showing enabled Taptix Floating Dock...")
 
-                val intent = Intent(this, OverlayService::class.java)
+                OverlayService.showService(this)
 
-                startForegroundService(intent)
-
-                if (prefsRepo.getSettings().ttsFeedbackEnabled) {
+                if (currentSettings.ttsFeedbackEnabled) {
 
                     ttsManager?.speak("Ride hailing app detected. Taptix auto-accept ready.")
 

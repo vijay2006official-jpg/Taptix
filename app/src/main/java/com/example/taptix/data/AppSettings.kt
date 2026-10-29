@@ -34,5 +34,6 @@ data class AppSettings(
     val mapZoneRadiusKm: Double = 2.0,
     val vibrationOnAccept: Boolean = true,
     val negativeKeywords: String = "CASH, LOW RATING, SHARED",
-    val preferredAreas: String = ""
+    val preferredAreas: String = "",
+    val floatingDockEnabled: Boolean = false
 )

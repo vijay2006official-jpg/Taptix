@@ -2,6 +2,7 @@ package com.example.taptix.service
 
 import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.annotation.RequiresApi
@@ -29,17 +30,14 @@ class TaptixTileService : TileService() {
         prefsRepo.saveMasterControl(newState)
 
         if (newState) {
-            if (android.provider.Settings.canDrawOverlays(this)) {
-                val intent = Intent(this, OverlayService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(intent)
-                } else {
-                    startService(intent)
-                }
+            if (settings.floatingDockEnabled && Settings.canDrawOverlays(this)) {
+                OverlayService.showService(this)
             }
             AutoClickService.instance?.setClickingActive(true)
+            OverlayService.syncMasterState(this, true)
         } else {
             AutoClickService.instance?.setClickingActive(false)
+            OverlayService.syncMasterState(this, false)
         }
 
         updateTileState()
