@@ -1,4 +1,4 @@
-﻿package com.example.taptix.service
+package com.example.taptix.service
 
 import android.accessibilityservice.AccessibilityService
 
@@ -776,7 +776,7 @@ class AutoClickService : AccessibilityService() {
 
         // Per-app profile: check if auto-accept is enabled for this specific app
         val profile = prefsRepo.getAppProfile(appPkg)
-        if (profile != null && !profile.enabled) {
+        if (!profile.enabled) {
             Log.d(TAG, "Per-app profile disabled for $appPkg, skipping")
             return false
         }

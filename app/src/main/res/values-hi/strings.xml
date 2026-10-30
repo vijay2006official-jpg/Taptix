@@ -39,4 +39,9 @@
     <string name="tts_service_paused">ऑटो क्लिकर रुका हुआ है</string>
     <string name="tts_emergency_stop">आपातकालीन रोक सक्रिय। सभी क्लिक बंद।</string>
     <string name="tts_motion_lock">वाहन की गति का पता चला। सुरक्षा लॉक सक्रिय।</string>
+    <!-- Gesture Toggle (New v2.1) -->
+    <string name="gesture_toggle_on">⚡ जेस्चर चालू</string>
+    <string name="gesture_toggle_off">⏸ जेस्चर बंद</string>
+    <string name="gesture_automation_enabled">जेस्चर ऑटोमेशन सक्षम किया गया</string>
+    <string name="gesture_automation_disabled">जेस्चर ऑटोमेशन अक्षम किया गया</string>
 </resources>

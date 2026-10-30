@@ -39,4 +39,9 @@
     <string name="tts_service_paused">ஆட்டோ கிளிக்கர் இடைநிறுத்தப்பட்டது</string>
     <string name="tts_emergency_stop">அவசர நிறுத்தம் தூண்டப்பட்டது. அனைத்து கிளிக்குகளும் நிறுத்தப்பட்டன.</string>
     <string name="tts_motion_lock">வாகன இயக்கம் கண்டறியப்பட்டது. பாதுகாப்பு பூட்டு செயல்படுத்தப்பட்டது.</string>
+    <!-- Gesture Toggle (New v2.1) -->
+    <string name="gesture_toggle_on">⚡ சைகை ஆன்</string>
+    <string name="gesture_toggle_off">⏸ சைகை ஆஃப்</string>
+    <string name="gesture_automation_enabled">சைகை ஆட்டோமேஷன் இயக்கப்பட்டது</string>
+    <string name="gesture_automation_disabled">சைகை ஆட்டோமேஷன் முடக்கப்பட்டது</string>
 </resources>

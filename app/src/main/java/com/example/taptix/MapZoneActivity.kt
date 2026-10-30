@@ -102,8 +102,6 @@ fun MapZoneScreen(
     val updateMapLocation = { lat: Double, lng: Double ->
         pickedLat = lat
         pickedLng = lng
-        userGpsLat = lat
-        userGpsLng = lng
         webViewRef?.evaluateJavascript(
             "if(typeof updateLocation === 'function'){ updateLocation($lat, $lng); } else if(typeof map !== 'undefined'){ map.setView([$lat, $lng], 15); placeMarker($lat, $lng); }",
             null
@@ -115,7 +113,20 @@ fun MapZoneScreen(
             if (loc.hasSpeed()) {
                 currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
             }
-            updateMapLocation(loc.latitude, loc.longitude)
+            userGpsLat = loc.latitude
+            userGpsLng = loc.longitude
+            webViewRef?.evaluateJavascript(
+                "if (typeof updateUserGpsLocation === 'function') updateUserGpsLocation(${loc.latitude}, ${loc.longitude});",
+                null
+            )
+            if (initialZone == null) {
+                pickedLat = loc.latitude
+                pickedLng = loc.longitude
+                webViewRef?.evaluateJavascript(
+                    "if(typeof updateLocation === 'function'){ updateLocation(${loc.latitude}, ${loc.longitude}); } else if(typeof map !== 'undefined'){ map.setView([${loc.latitude}, ${loc.longitude}], 15); placeMarker(${loc.latitude}, ${loc.longitude}); }",
+                    null
+                )
+            }
         }
     }
 
@@ -151,7 +162,6 @@ fun MapZoneScreen(
                     with(settings) {
                         javaScriptEnabled = true
                         domStorageEnabled = true
-                        databaseEnabled = true
                         loadWithOverviewMode = true
                         useWideViewPort = true
                         builtInZoomControls = false
@@ -191,8 +201,10 @@ fun MapZoneScreen(
                                 Handler(Looper.getMainLooper()).post {
                                     pickedLat = lat
                                     pickedLng = lng
-                                    if (!address.isNullOrBlank()) {
-                                        pickedAddress = address
+                                    pickedAddress = if (!address.isNullOrBlank()) {
+                                        address
+                                    } else {
+                                        String.format(java.util.Locale.US, "%.4f, %.4f", lat, lng)
                                     }
                                 }
                             }
@@ -322,8 +334,16 @@ fun MapZoneScreen(
                 .clickable {
                     val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                     val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    val centerGps = {
+                        centerOnCurrentLocation(context) { loc ->
+                            if (loc.hasSpeed()) {
+                                currentSpeedKmh = (loc.speed * 3.6f).toInt().coerceAtLeast(0)
+                            }
+                            updateMapLocation(loc.latitude, loc.longitude)
+                        }
+                    }
                     if (fine || coarse) {
-                        fetchLocationAndCenter()
+                        centerGps()
                     } else {
                         locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
@@ -416,14 +436,14 @@ fun MapZoneScreen(
                 Button(
                     onClick = {
                         val newZone = MapZone(
-                            id = UUID.randomUUID().toString(),
+                            id = initialZone?.id ?: UUID.randomUUID().toString(),
                             name = if (pickedAddress.isNotBlank()) pickedAddress.take(25) else "Work Zone",
                             lat = pickedLat,
                             lng = pickedLng,
                             radiusKm = radiusKm.toDouble(),
                             isEnabled = true
                         )
-                        prefsRepo.addOrUpdateMapZone(newZone)
+                        prefsRepo.saveMapZones(listOf(newZone))
                         prefsRepo.saveMapZone(pickedLat, pickedLng, radiusKm.toDouble())
                         prefsRepo.saveMapZoneEnabled(true)
                         Toast.makeText(context, "✅ Work boundary saved: ${radiusKm.toInt()} km circle", Toast.LENGTH_SHORT).show()
@@ -617,7 +637,10 @@ function fetchAddressAndPopup(lat, lng) {
         addr = lat.toFixed(4) + ', ' + lng.toFixed(4);
       }
       if (marker) {
-        marker.bindPopup('<div style="font-size:12px; font-weight:700; line-height:16px; color:#0F172A;">📍 ' + addr + '</div>').openPopup();
+        marker.bindPopup('<div style="font-size:12px; font-weight:700; line-height:16px; color:#0F172A;">📍 ' + addr + '</div>', {
+          autoClose: false,
+          closeOnClick: false
+        }).openPopup();
       }
       if (typeof Android !== 'undefined' && Android.onLocationPicked) {
         Android.onLocationPicked(lat, lng, addr);
@@ -625,6 +648,12 @@ function fetchAddressAndPopup(lat, lng) {
     })
     .catch(function() {
       var fallback = lat.toFixed(4) + ', ' + lng.toFixed(4);
+      if (marker) {
+        marker.bindPopup('<div style="font-size:12px; font-weight:700; line-height:16px; color:#0F172A;">📍 ' + fallback + '</div>', {
+          autoClose: false,
+          closeOnClick: false
+        }).openPopup();
+      }
       if (typeof Android !== 'undefined' && Android.onLocationPicked) {
         Android.onLocationPicked(lat, lng, fallback);
       }
@@ -635,14 +664,34 @@ function placeMarker(lat, lng) {
   if (marker) map.removeLayer(marker);
   if (circle) map.removeLayer(circle);
 
-  marker = L.marker([lat, lng], {icon: pinIcon}).addTo(map);
+  if (typeof Android !== 'undefined' && Android.onLocationPicked) {
+    Android.onLocationPicked(lat, lng, null);
+  }
+
+  marker = L.marker([lat, lng], {
+    icon: pinIcon,
+    interactive: true,
+    bubblingMouseEvents: true
+  }).addTo(map);
+  marker.on('click', function(e) {
+    if (e && e.latlng) placeMarker(e.latlng.lat, e.latlng.lng);
+  });
+
   circle = L.circle([lat, lng], {
     radius: radiusM,
     color: '#0066FF',
     fillColor: '#0066FF',
     fillOpacity: 0.18,
-    weight: 2
+    weight: 2,
+    interactive: true,
+    bubblingMouseEvents: true
   }).addTo(map);
+  circle.on('click', function(e) {
+    if (e && e.latlng) placeMarker(e.latlng.lat, e.latlng.lng);
+  });
+  circle.on('contextmenu', function(e) {
+    if (e && e.latlng) placeMarker(e.latlng.lat, e.latlng.lng);
+  });
 
   fetchAddressAndPopup(lat, lng);
 }
@@ -668,7 +717,6 @@ function updateLocation(lat, lng) {
   if (typeof map !== 'undefined' && map) {
     map.setView([lat, lng], 15);
     placeMarker(lat, lng);
-    updateUserGpsLocation(lat, lng);
   }
 }
 
@@ -682,8 +730,16 @@ function updateRadius(r) {
       color: '#0066FF',
       fillColor: '#0066FF',
       fillOpacity: 0.18,
-      weight: 2
+      weight: 2,
+      interactive: true,
+      bubblingMouseEvents: true
     }).addTo(map);
+    circle.on('click', function(e) {
+      if (e && e.latlng) placeMarker(e.latlng.lat, e.latlng.lng);
+    });
+    circle.on('contextmenu', function(e) {
+      if (e && e.latlng) placeMarker(e.latlng.lat, e.latlng.lng);
+    });
   }
 }
 
