@@ -16,9 +16,10 @@ enum class PlatformPreset(
         title = "Universal (All Duties)",
         keywords = listOf(
             "ACCEPT", "TAP TO ACCEPT", "ACCEPT TRIP", "ACCEPT RIDE", "ACCEPT ORDER",
-            "ACCEPT BOOKING", "ACCEPT DUTY", "CONFIRM", "CONFIRM RIDE", "CONFIRM ORDER", "SWIPE TO ACCEPT",
-            "CAPTAIN ACCEPT", "TAKE RIDE", "START DUTY", "TAKE DUTY", "START TRIP",
-            "ACCEPT DELIVERY", "ACCEPT PARCEL", "ACCEPT OFFER", "MAKE OFFER"
+            "ACCEPT BOOKING", "ACCEPT DUTY", "CONFIRM", "CONFIRM RIDE", "CONFIRM ORDER", "CONFIRM BOOKING",
+            "SWIPE TO ACCEPT", "CAPTAIN ACCEPT", "TAKE RIDE", "START DUTY", "TAKE DUTY", "START TRIP",
+            "ACCEPT DELIVERY", "ACCEPT PARCEL", "ACCEPT OFFER", "MAKE OFFER", "ACCEPT REQUEST",
+            "TAKE ORDER", "TAKE TRIP", "NEW RIDE", "NEW TRIP", "NEW ORDER", "RIDE OFFER", "NEW BOOKING"
         ),
         requiresSwipe = false
     ),
@@ -27,7 +28,7 @@ enum class PlatformPreset(
         title = "Uber Driver",
         keywords = listOf(
             "ACCEPT", "TAP TO ACCEPT", "ACCEPT TRIP", "ACCEPT RIDE", "ACCEPT OFFER",
-            "ACCEPT DELIVERY"
+            "ACCEPT DELIVERY", "ACCEPT ORDER"
         ),
         requiresSwipe = false
     ),
@@ -36,7 +37,7 @@ enum class PlatformPreset(
         title = "Ola Partner",
         keywords = listOf(
             "ACCEPT", "CONFIRM RIDE", "ACCEPT RIDE",
-            "ACCEPT DUTY", "TAKE DUTY", "START TRIP"
+            "ACCEPT DUTY", "TAKE DUTY", "START TRIP", "CONFIRM BOOKING", "ACCEPT BOOKING"
         ),
         requiresSwipe = false
     ),
@@ -45,26 +46,26 @@ enum class PlatformPreset(
         title = "Rapido Captain",
         keywords = listOf(
             "ACCEPT ORDER", "ACCEPT RIDE", "ACCEPT", "CAPTAIN ACCEPT", "SWIPE TO ACCEPT",
-            "TAKE ORDER", "CONFIRM ORDER"
+            "TAKE ORDER", "CONFIRM ORDER", "ACCEPT BOOKING", "ACCEPT DUTY"
         ),
         requiresSwipe = false
     ),
     INDRIVER(
         id = "indriver",
         title = "inDrive",
-        keywords = listOf("ACCEPT", "MAKE OFFER", "ACCEPT OFFER", "RAISE FARE"),
+        keywords = listOf("ACCEPT", "MAKE OFFER", "ACCEPT OFFER", "RAISE FARE", "ACCEPT REQUEST"),
         requiresSwipe = false
     ),
     PORTER(
         id = "porter",
         title = "Porter Partner",
-        keywords = listOf("ACCEPT ORDER", "ACCEPT TRIP", "ACCEPT", "TAKE TRIP", "NEW TRIP"),
+        keywords = listOf("ACCEPT ORDER", "ACCEPT TRIP", "ACCEPT", "TAKE TRIP", "NEW TRIP", "ACCEPT BOOKING", "TAKE ORDER"),
         requiresSwipe = false
     ),
     NAMMAYATRI(
         id = "nammayatri",
         title = "Namma Yatri Partner",
-        keywords = listOf("ACCEPT", "ACCEPT RIDE", "NEW RIDE", "RIDE OFFER", "ACCEPT OFFER"),
+        keywords = listOf("ACCEPT", "ACCEPT RIDE", "NEW RIDE", "RIDE OFFER", "ACCEPT OFFER", "CONFIRM", "ACCEPT BOOKING"),
         requiresSwipe = false
     ),
     CUSTOM(

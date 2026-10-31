@@ -1,6 +1,6 @@
 {
-  "versionCode": 19,
+  "versionCode": 20,
   "versionName": "2.2",
-  "apkUrl": "https://github.com/vijay2006official-jpg/Taptix/releases/download/v2.2.19/Taptix-v2.2-build19.apk",
-  "releaseNotes": "Taptix v2.2 (Build 19) Official Update:\n• Fixed Map Zone Selection: Tap and select any area on the map seamlessly\n• Decoupled GPS real-time dot from work zone pin\n• Instant coordinate reverse-geocoding\n• Multi-language localization fixes for Hindi and Tamil"
+  "apkUrl": "https://github.com/vijay2006official-jpg/Taptix/releases/download/v2.2.20/Taptix-v2.2-build20.apk",
+  "releaseNotes": "Taptix v2.2 (Build 20) Official Update:\n• Fixed Map Work Zone Auto-Accept: Bookings within selected map boundary now accepted instantly without GPS block\n• Multi-App Support: Fully optimized for Uber, Ola, Rapido, inDrive, Porter, Namma Yatri\n• Hardware Gesture Dispatch: Dual-mode click engine for Flutter & custom canvas buttons\n• Instant On-Duty activation when saving map work boundary"
 }
