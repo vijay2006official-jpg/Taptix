@@ -3,16 +3,17 @@ package com.example.taptix.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.taptix.model.ActivityLogItem
+import com.example.taptix.model.ActivitySummary
 import com.example.taptix.model.DailyAnalyticsRecord
-import com.example.taptix.model.EarningsSummary
 import com.example.taptix.model.LogStatus
 import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * Driver Analytics Engine & Aggregator.
- * Manages daily records, earnings summaries, performance stats, and expense tracking.
+ * Manages persistent driver activity records, acceptance rate trends,
+ * and 7-day operational performance without financial or earnings tracking.
  */
 class AnalyticsManager(context: Context) {
 
@@ -20,13 +21,12 @@ class AnalyticsManager(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    private val dayNameFormat = SimpleDateFormat("EEE", Locale.US)
 
     fun getTodayDateString(): String = dateFormat.format(Date())
 
     @Synchronized
     fun getAllRecords(): List<DailyAnalyticsRecord> {
-        val jsonStr = prefs.getString(KEY_DAILY_RECORDS, null) ?: return emptyList()
+        val jsonStr = prefs.getString(KEY_RECORDS_JSON, null) ?: return emptyList()
         val list = mutableListOf<DailyAnalyticsRecord>()
         try {
             val arr = JSONArray(jsonStr)
@@ -36,13 +36,13 @@ class AnalyticsManager(context: Context) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        return list.sortedByDescending { it.dateString }
+        return list
     }
 
     @Synchronized
     fun getRecordForDate(dateStr: String): DailyAnalyticsRecord {
-        return getAllRecords().firstOrNull { it.dateString == dateStr }
-            ?: DailyAnalyticsRecord(dateString = dateStr)
+        val all = getAllRecords()
+        return all.firstOrNull { it.dateString == dateStr } ?: DailyAnalyticsRecord(dateString = dateStr)
     }
 
     @Synchronized
@@ -52,186 +52,173 @@ class AnalyticsManager(context: Context) {
 
     @Synchronized
     fun saveDailyRecord(record: DailyAnalyticsRecord) {
-        val records = getAllRecords().toMutableList()
-        val index = records.indexOfFirst { it.dateString == record.dateString }
-        if (index >= 0) {
-            records[index] = record
+        val all = getAllRecords().toMutableList()
+        val index = all.indexOfFirst { it.dateString == record.dateString }
+        if (index != -1) {
+            all[index] = record
         } else {
-            records.add(record)
+            all.add(0, record)
         }
-        // Retain up to 90 days of daily aggregates
-        val trimmed = records.sortedByDescending { it.dateString }.take(90)
+
+        // Keep up to 60 days of historical activity records
+        val trimmed = if (all.size > 60) all.take(60) else all
         val arr = JSONArray()
-        trimmed.forEach { arr.put(it.toJson()) }
-        prefs.edit().putString(KEY_DAILY_RECORDS, arr.toString()).apply()
+        for (item in trimmed) {
+            arr.put(item.toJson())
+        }
+        prefs.edit().putString(KEY_RECORDS_JSON, arr.toString()).apply()
     }
 
     @Synchronized
     fun recordBooking(
-        fare: Double?,
-        distanceKm: Double?,
         wasAccepted: Boolean,
         isCompleted: Boolean = false,
+        distanceKm: Double? = null,
         timestamp: Long = System.currentTimeMillis()
     ) {
         val dateStr = dateFormat.format(Date(timestamp))
         val current = getRecordForDate(dateStr)
 
-        val validFare = if (fare != null && fare > 0.0 && !fare.isNaN() && !fare.isInfinite()) fare else 0.0
-        val validDist = if (distanceKm != null && distanceKm > 0.0 && !distanceKm.isNaN() && !distanceKm.isInfinite()) distanceKm else 0.0
+        val validDist = if (distanceKm != null && distanceKm > 0.0 && !distanceKm.isNaN() && !distanceKm.isInfinite()) {
+            distanceKm
+        } else 0.0
 
         val updated = current.copy(
-            earnings = if (wasAccepted) current.earnings + validFare else current.earnings,
-            acceptedCount = if (wasAccepted) current.acceptedCount + 1 else current.acceptedCount,
-            rejectedCount = if (!wasAccepted) current.rejectedCount + 1 else current.rejectedCount,
-            completedCount = if (isCompleted || wasAccepted) current.completedCount + 1 else current.completedCount,
-            distanceKm = if (wasAccepted) current.distanceKm + validDist else current.distanceKm
+            timestamp = timestamp,
+            acceptedCount = current.acceptedCount + if (wasAccepted) 1 else 0,
+            rejectedCount = current.rejectedCount + if (!wasAccepted) 1 else 0,
+            completedCount = current.completedCount + if (isCompleted) 1 else 0,
+            distanceKm = current.distanceKm + validDist
         )
         saveDailyRecord(updated)
     }
 
     @Synchronized
-    fun recordExpense(fuelAmount: Double, otherAmount: Double, dateStr: String = getTodayDateString()) {
-        val current = getRecordForDate(dateStr)
-        val updated = current.copy(
-            fuelExpense = current.fuelExpense + fuelAmount.coerceAtLeast(0.0),
-            otherExpenses = current.otherExpenses + otherAmount.coerceAtLeast(0.0)
-        )
-        saveDailyRecord(updated)
-    }
-
-    @Synchronized
-    fun getTodaySummary(): EarningsSummary {
+    fun getTodaySummary(): ActivitySummary {
         val today = getTodayRecord()
-        return EarningsSummary(
-            periodTitle = "Today",
-            totalEarnings = today.earnings,
-            totalDistanceKm = today.distanceKm,
-            completedTrips = today.completedCount,
-            acceptedTrips = today.acceptedCount,
-            rejectedTrips = today.rejectedCount,
-            averageFare = today.averageFare,
-            totalExpenses = today.totalExpenses,
-            netProfit = today.netProfit,
-            acceptanceRate = today.acceptanceRate,
-            dailyBreakdown = listOf(Pair("Today", today.earnings))
+        return ActivitySummary(
+            periodLabel = "Today",
+            totalOffers = today.totalRequests,
+            acceptedCount = today.acceptedCount,
+            rejectedCount = today.rejectedCount,
+            completedCount = today.completedCount,
+            distanceKm = today.distanceKm,
+            dailyRecords = listOf(today)
         )
     }
 
     @Synchronized
-    fun getWeeklySummary(): EarningsSummary {
-        val cal = Calendar.getInstance()
-        val breakdown = mutableListOf<Pair<String, Double>>()
-        var sumEarnings = 0.0
-        var sumDistance = 0.0
-        var sumAccepted = 0
-        var sumRejected = 0
-        var sumCompleted = 0
-        var sumExpenses = 0.0
+    fun getWeeklySummary(): ActivitySummary {
+        val all = getAllRecords()
+        val calendar = Calendar.getInstance()
+        val records7Days = mutableListOf<DailyAnalyticsRecord>()
 
-        // Last 7 days in chronological order
-        for (i in 6 downTo 0) {
-            val c = Calendar.getInstance()
-            c.add(Calendar.DAY_OF_YEAR, -i)
-            val dStr = dateFormat.format(c.time)
-            val dayName = dayNameFormat.format(c.time)
-            val record = getRecordForDate(dStr)
-
-            sumEarnings += record.earnings
-            sumDistance += record.distanceKm
-            sumAccepted += record.acceptedCount
-            sumRejected += record.rejectedCount
-            sumCompleted += record.completedCount
-            sumExpenses += record.totalExpenses
-            breakdown.add(Pair(dayName, record.earnings))
+        for (i in 0 until 7) {
+            val d = dateFormat.format(calendar.time)
+            val rec = all.firstOrNull { it.dateString == d } ?: DailyAnalyticsRecord(dateString = d)
+            records7Days.add(0, rec)
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
         }
 
-        val totalRequests = sumAccepted + sumRejected
-        val rate = if (totalRequests > 0) ((sumAccepted * 100) / totalRequests) else 0
-        val avgFare = if (sumAccepted > 0) sumEarnings / sumAccepted else 0.0
+        var totalAccepted = 0
+        var totalRejected = 0
+        var totalCompleted = 0
+        var totalDist = 0.0
 
-        return EarningsSummary(
-            periodTitle = "This Week (7 Days)",
-            totalEarnings = sumEarnings,
-            totalDistanceKm = sumDistance,
-            completedTrips = sumCompleted,
-            acceptedTrips = sumAccepted,
-            rejectedTrips = sumRejected,
-            averageFare = avgFare,
-            totalExpenses = sumExpenses,
-            netProfit = sumEarnings - sumExpenses,
-            acceptanceRate = rate,
-            dailyBreakdown = breakdown
+        for (r in records7Days) {
+            totalAccepted += r.acceptedCount
+            totalRejected += r.rejectedCount
+            totalCompleted += r.completedCount
+            totalDist += r.distanceKm
+        }
+
+        return ActivitySummary(
+            periodLabel = "This Week",
+            totalOffers = totalAccepted + totalRejected,
+            acceptedCount = totalAccepted,
+            rejectedCount = totalRejected,
+            completedCount = totalCompleted,
+            distanceKm = totalDist,
+            dailyRecords = records7Days
         )
     }
 
     @Synchronized
-    fun getMonthlySummary(): EarningsSummary {
+    fun getMonthlySummary(): ActivitySummary {
+        val all = getAllRecords()
         val currentMonthPrefix = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
-        val records = getAllRecords().filter { it.dateString.startsWith(currentMonthPrefix) }
+        val monthRecords = all.filter { it.dateString.startsWith(currentMonthPrefix) }
 
-        val sumEarnings = records.sumOf { it.earnings }
-        val sumDistance = records.sumOf { it.distanceKm }
-        val sumAccepted = records.sumOf { it.acceptedCount }
-        val sumRejected = records.sumOf { it.rejectedCount }
-        val sumCompleted = records.sumOf { it.completedCount }
-        val sumExpenses = records.sumOf { it.totalExpenses }
+        var totalAccepted = 0
+        var totalRejected = 0
+        var totalCompleted = 0
+        var totalDist = 0.0
 
-        val totalRequests = sumAccepted + sumRejected
-        val rate = if (totalRequests > 0) ((sumAccepted * 100) / totalRequests) else 0
-        val avgFare = if (sumAccepted > 0) sumEarnings / sumAccepted else 0.0
+        for (r in monthRecords) {
+            totalAccepted += r.acceptedCount
+            totalRejected += r.rejectedCount
+            totalCompleted += r.completedCount
+            totalDist += r.distanceKm
+        }
 
-        return EarningsSummary(
-            periodTitle = "This Month",
-            totalEarnings = sumEarnings,
-            totalDistanceKm = sumDistance,
-            completedTrips = sumCompleted,
-            acceptedTrips = sumAccepted,
-            rejectedTrips = sumRejected,
-            averageFare = avgFare,
-            totalExpenses = sumExpenses,
-            netProfit = sumEarnings - sumExpenses,
-            acceptanceRate = rate
+        return ActivitySummary(
+            periodLabel = "This Month",
+            totalOffers = totalAccepted + totalRejected,
+            acceptedCount = totalAccepted,
+            rejectedCount = totalRejected,
+            completedCount = totalCompleted,
+            distanceKm = totalDist,
+            dailyRecords = monthRecords
         )
     }
 
-    /**
-     * Bootstraps daily records from existing activity audit logs if analytics store is empty.
-     */
     @Synchronized
     fun syncFromLogs(logs: List<ActivityLogItem>) {
         if (logs.isEmpty()) return
-        val currentRecords = getAllRecords()
-        if (currentRecords.isNotEmpty()) return // Already populated
+        val dailyMap = mutableMapOf<String, MutableList<ActivityLogItem>>()
 
-        val grouped = logs.groupBy { dateFormat.format(Date(it.timestamp)) }
-        for ((dateStr, dayLogs) in grouped) {
-            val accepted = dayLogs.filter { it.status == LogStatus.ACCEPTED }
-            val rejected = dayLogs.filter { it.status != LogStatus.ACCEPTED && it.status != LogStatus.SYSTEM_EVENT }
-            val earnings = accepted.sumOf { it.fare ?: 0.0 }
-            val distance = accepted.sumOf { it.distanceKm ?: 0.0 }
+        for (log in logs) {
+            val dateStr = dateFormat.format(Date(log.timestamp))
+            dailyMap.getOrPut(dateStr) { mutableListOf() }.add(log)
+        }
 
-            val record = DailyAnalyticsRecord(
-                dateString = dateStr,
-                timestamp = dayLogs.firstOrNull()?.timestamp ?: System.currentTimeMillis(),
-                earnings = earnings,
-                acceptedCount = accepted.size,
-                rejectedCount = rejected.size,
-                completedCount = accepted.size,
-                distanceKm = distance
+        for ((dateStr, dayLogs) in dailyMap) {
+            var accepted = 0
+            var rejected = 0
+            var completed = 0
+            var distance = 0.0
+
+            for (item in dayLogs) {
+                if (item.status == LogStatus.ACCEPTED) {
+                    accepted++
+                    completed++
+                    if (item.distanceKm != null && item.distanceKm > 0.0) {
+                        distance += item.distanceKm
+                    }
+                } else {
+                    rejected++
+                }
+            }
+
+            val existing = getRecordForDate(dateStr)
+            val merged = existing.copy(
+                acceptedCount = maxOf(existing.acceptedCount, accepted),
+                rejectedCount = maxOf(existing.rejectedCount, rejected),
+                completedCount = maxOf(existing.completedCount, completed),
+                distanceKm = maxOf(existing.distanceKm, distance)
             )
-            saveDailyRecord(record)
+            saveDailyRecord(merged)
         }
     }
 
     @Synchronized
     fun clearAnalytics() {
-        prefs.edit().remove(KEY_DAILY_RECORDS).apply()
+        prefs.edit().remove(KEY_RECORDS_JSON).apply()
     }
 
     companion object {
         private const val PREFS_NAME = "taptix_driver_analytics"
-        private const val KEY_DAILY_RECORDS = "key_daily_records_json"
+        private const val KEY_RECORDS_JSON = "key_analytics_records_json"
 
         @Volatile
         private var INSTANCE: AnalyticsManager? = null

@@ -89,7 +89,7 @@ fun DriverDashboardCard(
                 }
             }
 
-            // ── Today's Earnings Hero Tile ──
+            // ── Today's Activity Hero Tile ──
             Surface(
                 color = Color(0xFF1E293B),
                 shape = RoundedCornerShape(14.dp),
@@ -106,7 +106,7 @@ fun DriverDashboardCard(
                 ) {
                     Column {
                         Text(
-                            "TODAY'S ESTIMATED EARNINGS",
+                            "TODAY'S DRIVER AUTOMATION ACTIVITY",
                             color = Color(0xFF94A3B8),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -114,23 +114,21 @@ fun DriverDashboardCard(
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            String.format(Locale.US, "₹ %.2f", todayRecord.earnings),
+                            "${todayRecord.acceptedCount} RIDES ACCEPTED",
                             color = Color.White,
-                            fontSize = 24.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Black
                         )
-                        if (todayRecord.totalExpenses > 0) {
-                            Text(
-                                String.format(Locale.US, "Net Profit: ₹ %.2f (Fuel/Exp: ₹ %.2f)", todayRecord.netProfit, todayRecord.totalExpenses),
-                                color = Color(0xFF34D399),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                        Text(
+                            "${todayRecord.completedCount} completed trips • ${todayRecord.acceptanceRate}% acceptance rate",
+                            color = Color(0xFF38BDF8),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
 
                     Column(horizontalAlignment = Alignment.End) {
-                        Text("View Trends ➔", color = Color(0xFF38BDF8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("View Stats ➔", color = Color(0xFF38BDF8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         if (!activeZoneName.isNullOrBlank()) {
                             Spacer(Modifier.height(4.dp))
                             Text("📍 $activeZoneName", color = Color(0xFF94A3B8), fontSize = 10.sp, maxLines = 1)
@@ -186,7 +184,7 @@ fun DriverDashboardCard(
                     modifier = Modifier.weight(1f)
                 )
                 DashboardQuickBtn(
-                    label = "📊 Analytics",
+                    label = "📊 Performance",
                     onClick = onOpenAnalytics,
                     modifier = Modifier.weight(1f)
                 )

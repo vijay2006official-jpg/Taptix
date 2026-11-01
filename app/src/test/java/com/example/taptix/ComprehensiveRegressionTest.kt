@@ -7,10 +7,10 @@ import org.junit.Test
 import org.json.JSONObject
 
 /**
- * Phase H: Comprehensive Testing & Regression Verification Test Suite.
+ * Phase H & Phase J: Comprehensive Testing & Regression Verification Test Suite.
  * Validates the complete driver automation platform across automation engine lifecycle,
  * 4 distinct booking states, boundary filters, target areas, geofencing,
- * analytics calculations, and absolute schedule absence.
+ * operational activity calculations, shift schedule absence, and strict financial restriction.
  */
 class ComprehensiveRegressionTest {
 
@@ -353,48 +353,41 @@ class ComprehensiveRegressionTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 4. PHASE F DRIVER DASHBOARD & ANALYTICS TESTING
+    // 4. PHASE F / PHASE J DRIVER DASHBOARD & ACTIVITY TESTING (STRICTLY NON-FINANCIAL)
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    fun testDriverAnalytics_CalculationsAndExpenseAccounting() {
+    fun testDriverActivity_OperationalMetricsAccounting() {
         val record = DailyAnalyticsRecord(
             dateString = "2026-11-01",
-            earnings = 1800.0,
             acceptedCount = 8,
             rejectedCount = 2,
             completedCount = 6,
-            distanceKm = 52.4,
-            fuelExpense = 400.0,
-            otherExpenses = 100.0
+            distanceKm = 52.4
         )
 
-        // Net profit calculation: 1800 - (400 + 100) = 1300
-        assertEquals(1300.0, record.netProfit, 0.001)
-
-        // Average earnings per accepted ride: 1800 / 8 = 225.0
-        assertEquals(225.0, record.averageFare, 0.001)
+        // Trip counts
+        assertEquals(8, record.acceptedCount)
+        assertEquals(2, record.rejectedCount)
+        assertEquals(6, record.completedCount)
+        assertEquals(10, record.totalRequests)
 
         // Acceptance rate: 8 / (8 + 2) = 80%
         assertEquals(80, record.acceptanceRate)
 
         // Zero division protection
         val zeroRecord = DailyAnalyticsRecord(dateString = "2026-11-01")
-        assertEquals(0.0, zeroRecord.averageFare, 0.001)
         assertEquals(0, zeroRecord.acceptanceRate)
     }
 
     @Test
-    fun testDriverAnalytics_JsonSerializationAndSanitization() {
+    fun testDriverActivity_JsonSerializationAndSanitization() {
         val record = DailyAnalyticsRecord(
             dateString = "2026-11-01",
-            earnings = 950.0,
             acceptedCount = 4,
             rejectedCount = 1,
             completedCount = 4,
-            distanceKm = 30.0,
-            fuelExpense = 200.0,
-            otherExpenses = 50.0
+            distanceKm = 30.0
         )
 
         val json = record.toJson()
@@ -404,9 +397,21 @@ class ComprehensiveRegressionTest {
         assertEquals(record.acceptedCount, deserialized.acceptedCount)
         assertEquals(record.rejectedCount, deserialized.rejectedCount)
         assertEquals(record.completedCount, deserialized.completedCount)
-        assertEquals(record.earnings, deserialized.earnings, 0.001)
-        assertEquals(record.fuelExpense, deserialized.fuelExpense, 0.001)
-        assertEquals(record.netProfit, deserialized.netProfit, 0.001)
+        assertEquals(record.distanceKm, deserialized.distanceKm, 0.001)
+        assertEquals(record.acceptanceRate, deserialized.acceptanceRate)
+    }
+
+    @Test
+    fun testFinancialFeatureRestriction_Section10Compliance() {
+        val fields = DailyAnalyticsRecord::class.java.declaredFields.map { it.name.lowercase() }
+        val financialKeywords = listOf("earnings", "fare", "income", "profit", "expense", "revenue", "cost", "rupee", "price", "wage")
+
+        for (kw in financialKeywords) {
+            assertFalse(
+                "DailyAnalyticsRecord must NOT contain financial field '$kw' (Section 10)",
+                fields.any { it.contains(kw) }
+            )
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

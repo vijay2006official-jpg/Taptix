@@ -5906,10 +5906,9 @@ class AutoClickService : AccessibilityService() {
                     try {
 
                         com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
-                            fare = fare,
-                            distanceKm = distanceKm,
                             wasAccepted = true,
-                            isCompleted = true
+                            isCompleted = true,
+                            distanceKm = distanceKm
                         )
 
                     } catch (e: Exception) {
@@ -6225,9 +6224,8 @@ class AutoClickService : AccessibilityService() {
         )
         try {
             com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
-                fare = offer.fare,
-                distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm,
-                wasAccepted = false
+                wasAccepted = false,
+                distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to record rejected booking", e)
