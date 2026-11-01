@@ -6669,7 +6669,7 @@ class AutoClickService : AccessibilityService() {
 
 
 
-                        lm.requestLocationUpdates(provider, 4000L, 10f, locationListener!!, android.os.Looper.getMainLooper())
+                        lm.requestLocationUpdates(provider, 20000L, 25f, locationListener!!, android.os.Looper.getMainLooper())
 
 
 

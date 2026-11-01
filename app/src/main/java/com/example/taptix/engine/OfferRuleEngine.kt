@@ -271,24 +271,19 @@ object OfferRuleEngine {
             if (driverLocation == null) {
                 matchedRules.add("Work Zone Active (GPS resolving, offer allowed)")
             } else {
-                var insideZone: MapZone? = null
-                var minDistance = Double.MAX_VALUE
+                val geofenceStatus = GeofenceEngine.evaluateDriverPosition(
+                    lat = driverLocation.first,
+                    lng = driverLocation.second,
+                    accuracyMeters = 25f,
+                    activeZones = activeZones
+                )
 
-                for (zone in activeZones) {
-                    val d = haversineDistanceKm(driverLocation.first, driverLocation.second, zone.lat, zone.lng)
-                    if (d < minDistance) minDistance = d
-                    if (d <= zone.radiusKm * 1.20) {
-                        insideZone = zone
-                        break
-                    }
-                }
-
-                if (insideZone != null) {
-                    matchedRules.add("Within Work Zone: ${insideZone.name}")
+                if (geofenceStatus.isInsideAnyZone && geofenceStatus.matchedZone != null) {
+                    matchedRules.add("Within Work Zone: ${geofenceStatus.matchedZone.name}")
                 } else {
                     return RuleEvaluationResult(
                         isAccepted = false,
-                        rejectedReason = "Outside all active work zones (${String.format(Locale.US, "%.1f", minDistance)} km away)",
+                        rejectedReason = "Outside all active work zones (${String.format(Locale.US, "%.1f", geofenceStatus.nearestZoneDistanceKm)} km away)",
                         evaluatedFare = offer.fare,
                         evaluatedDistanceKm = offer.pickupDistanceKm
                     )
@@ -307,13 +302,6 @@ object OfferRuleEngine {
     }
 
     fun haversineDistanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6371.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2) * sin(dLon / 2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return r * c
+        return GeofenceEngine.haversineDistanceKm(lat1, lon1, lat2, lon2)
     }
 }

@@ -135,7 +135,7 @@ class PreferencesRepository(context: Context) {
         prefs.edit().putString(KEY_MAP_ZONES_JSON, arr.toString()).apply()
     }
 
-    fun addOrUpdateMapZone(zone: MapZone) {
+        fun addOrUpdateMapZone(zone: MapZone) {
         val current = getMapZones().toMutableList()
         val index = current.indexOfFirst { it.id == zone.id }
         if (index >= 0) {
@@ -144,6 +144,22 @@ class PreferencesRepository(context: Context) {
             current.add(zone)
         }
         saveMapZones(current)
+    }
+
+    fun deleteMapZone(id: String) {
+        val current = getMapZones().filter { it.id != id }
+        saveMapZones(current)
+    }
+
+    fun toggleMapZone(id: String, enabled: Boolean) {
+        val current = getMapZones().map {
+            if (it.id == id) it.copy(isEnabled = enabled) else it
+        }
+        saveMapZones(current)
+    }
+
+    fun getMapZone(id: String): MapZone? {
+        return getMapZones().firstOrNull { it.id == id }
     }
 
     // --- Area Groups / Profiles ---
