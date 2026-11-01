@@ -17,3 +17,5 @@ local.properties
 *.keystore
 keystore.properties
 upload_*.py
+
+.kotlin/

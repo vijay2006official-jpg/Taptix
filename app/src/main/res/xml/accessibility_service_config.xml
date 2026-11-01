@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged|typeViewClicked"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds|flagIncludeNotImportantViews"
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
-    android:notificationTimeout="200"
-    android:packageNames="com.ubercab.driver,com.olacabs.driver,com.olacabs.partner,com.rapido.captain,com.rapido.passenger,com.indriver,sinet.startup.inDriver,in.juspay.nammayatripartner,com.theporter.partner,me.lyft.driver,com.grabtaxi.driver2,com.dd.driver,com.example.taptix" />
+    android:notificationTimeout="100" />
