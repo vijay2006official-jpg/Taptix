@@ -10,7 +10,10 @@ import com.example.taptix.model.OfferDetails
  */
 object OfferParser {
 
-    private val FARE_REGEX = Regex("""(?:₹|RS\.?|INR|\$)\s*([0-9]+(?:[.,][0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
+    private val FARE_REGEX = Regex(
+        """(?:₹|RS\.?|INR|\$)\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?)""",
+        RegexOption.IGNORE_CASE
+    )
     private val DISTANCE_KM_REGEX = Regex("""([0-9]+(?:[.,][0-9]{1,2})?)\s*(?:KM|KMS)""", RegexOption.IGNORE_CASE)
     private val DISTANCE_METERS_REGEX = Regex("""([0-9]{2,4})\s*(?:M|METERS)""", RegexOption.IGNORE_CASE)
 
@@ -48,8 +51,20 @@ object OfferParser {
 
     fun extractFare(text: String): Double? {
         val match = FARE_REGEX.find(text) ?: return null
-        val numStr = match.groupValues[1].replace(",", ".")
-        return numStr.toDoubleOrNull()
+        val raw = match.groupValues[1].trim()
+        val cleanStr = when {
+            raw.contains(",") && raw.contains(".") -> raw.replace(",", "")
+            raw.contains(",") -> {
+                val parts = raw.split(",")
+                if (parts.last().length == 3 || parts.size > 2) {
+                    raw.replace(",", "")
+                } else {
+                    raw.replace(",", ".")
+                }
+            }
+            else -> raw
+        }
+        return cleanStr.toDoubleOrNull()
     }
 
     /**
@@ -73,65 +88,42 @@ object OfferParser {
     }
 
     /**
-     * Extracts pickup distance (distance from driver to rider).
+     * Extracts pickup-specific distance from text using contextual hints.
      */
     fun extractPickupDistanceKm(text: String): Double? {
-        // 1. Check direct inline pattern
-        val inlineMatch = INLINE_PICKUP_REGEX.find(text)
-        if (inlineMatch != null) {
-            return inlineMatch.groupValues[1].replace(",", ".").toDoubleOrNull()
+        val match = INLINE_PICKUP_REGEX.find(text)
+        if (match != null) {
+            val numStr = match.groupValues[1].replace(",", ".")
+            return numStr.toDoubleOrNull()
         }
-
-        // 2. Line-by-line inspection
-        val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
-        for (line in lines) {
-            val upper = line.uppercase()
-            if (upper.contains("PICKUP") || upper.contains("PICK UP") || upper.contains("AWAY") || upper.contains("FROM:")) {
-                val d = extractDistanceKm(line)
-                if (d != null) return d
-            }
-        }
-
-        // 3. If multiple distances exist without explicit keywords, first is assumed pickup
-        val allDistances = findAllDistancesKm(text)
-        if (allDistances.size >= 2) {
-            return allDistances[0]
-        }
-
         return null
     }
 
     /**
-     * Extracts trip / destination distance (distance from pickup to drop).
+     * Extracts trip / drop-off distance from text using contextual hints.
      */
     fun extractTripDistanceKm(text: String): Double? {
-        // 1. Check direct inline pattern
-        val inlineMatch = INLINE_TRIP_REGEX.find(text)
-        if (inlineMatch != null) {
-            return inlineMatch.groupValues[1].replace(",", ".").toDoubleOrNull()
+        val match = INLINE_TRIP_REGEX.find(text)
+        if (match != null) {
+            val numStr = match.groupValues[1].replace(",", ".")
+            return numStr.toDoubleOrNull()
         }
 
-        // 2. Line-by-line inspection
-        val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
-        for (line in lines) {
-            val upper = line.uppercase()
-            if (upper.contains("TRIP") || upper.contains("DROP") || upper.contains("DESTINATION") || upper.contains("TOTAL") || upper.contains("TO:")) {
-                val d = extractDistanceKm(line)
-                if (d != null) return d
-            }
-        }
-
-        // 3. If multiple distances exist without explicit keywords, second is assumed trip
+        // If no explicit trip prefix found, check if there are 2 distances in text
         val allDistances = findAllDistancesKm(text)
         if (allDistances.size >= 2) {
+            // First is typically pickup, second is trip
             return allDistances[1]
         }
-
         return null
     }
 
+    /**
+     * Identifies service category from screen text using multi-tier matching.
+     */
     fun extractCategory(text: String): String? {
-        return BookingServiceCategory.detectCategory(text)?.id
+        val category = BookingServiceCategory.detectCategory(text)
+        return category?.id
     }
 
     fun validateFare(fare: Double?): Double? {
@@ -149,18 +141,21 @@ object OfferParser {
     }
 
     private fun findAllDistancesKm(text: String): List<Double> {
-        val list = mutableListOf<Double>()
-        DISTANCE_KM_REGEX.findAll(text).forEach { match ->
-            match.groupValues[1].replace(",", ".").toDoubleOrNull()?.let { list.add(it) }
+        val results = mutableListOf<Double>()
+        val matches = DISTANCE_KM_REGEX.findAll(text)
+        for (m in matches) {
+            val numStr = m.groupValues[1].replace(",", ".")
+            val d = numStr.toDoubleOrNull()
+            if (d != null) results.add(d)
         }
-        return list
+        return results
     }
 
     private fun extractDestinationHint(text: String): String {
-        val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
         for (i in lines.indices) {
-            val l = lines[i].uppercase()
-            if (l.contains("DROP") || l.contains("DESTINATION") || l.contains("TO:")) {
+            val l = lines[i]
+            if (l.contains("drop", ignoreCase = true) || l.contains("to", ignoreCase = true) || l.contains("destination", ignoreCase = true)) {
                 if (i + 1 < lines.size) return lines[i + 1]
             }
         }
@@ -168,10 +163,10 @@ object OfferParser {
     }
 
     private fun extractPickupHint(text: String): String {
-        val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
         for (i in lines.indices) {
-            val l = lines[i].uppercase()
-            if (l.contains("PICKUP") || l.contains("FROM:")) {
+            val l = lines[i]
+            if (l.contains("pickup", ignoreCase = true) || l.contains("from", ignoreCase = true)) {
                 if (i + 1 < lines.size) return lines[i + 1]
             }
         }
@@ -180,17 +175,25 @@ object OfferParser {
 
     private fun collectTextRecursive(node: AccessibilityNodeInfo?, sb: StringBuilder) {
         if (node == null) return
-        val t = node.text?.toString()
-        val d = node.contentDescription?.toString()
-        if (!t.isNullOrBlank()) sb.append(t).append("\n")
-        if (!d.isNullOrBlank() && d != t) sb.append(d).append("\n")
 
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
+        val text = node.text?.toString()?.trim()
+        if (!text.isNullOrEmpty()) {
+            sb.append(text).append("\n")
+        }
+
+        val desc = node.contentDescription?.toString()?.trim()
+        if (!desc.isNullOrEmpty() && desc != text) {
+            sb.append(desc).append("\n")
+        }
+
+        val count = node.childCount
+        for (i in 0 until count) {
+            val child = try {
+                node.getChild(i)
+            } catch (e: Exception) {
+                null
+            }
             collectTextRecursive(child, sb)
-            try {
-                // child.recycle() handled by framework in modern SDK
-            } catch (_: Exception) {}
         }
     }
 }

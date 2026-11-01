@@ -1319,9 +1319,12 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        val settings = prefsRepo.getSettings()
-        // Early exit if automation is inactive
-        if (!settings.masterControlEnabled || !isClickingActive.get()) return
+        val settings = prefsRepo.getSettings()
+        // Early exit if automation is inactive
+        if (!settings.masterControlEnabled || !isClickingActive.get()) return
+        // Prevent accidental gesture taps when device is locked (pocket protection)
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        if (km?.isKeyguardLocked == true) return
 
         val eventPkg = (event.packageName?.toString() ?: "").lowercase()
         // Discard irrelevant system or background events early for battery conservation
@@ -4071,54 +4074,11 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        if (x < 0 || y < 0) {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        val dm = resources.displayMetrics
+        if (x <= 0f || y <= 0f || x > dm.widthPixels || y > dm.heightPixels) {
+            Log.w(TAG, "Coordinates ($x, $y) out of screen bounds (${dm.widthPixels}x${dm.heightPixels}); skipping tap")
             onResult?.invoke(false)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         }
 
 
@@ -8134,7 +8094,7 @@ class AutoClickService : AccessibilityService() {
 
 
 
-            try { child.recycle() } catch (_: Exception) {}
+            // child.recycle() deprecated in API 34+ and no longer needed
 
 
 
@@ -8518,7 +8478,7 @@ class AutoClickService : AccessibilityService() {
 
 
 
-            try { child.recycle() } catch (_: Exception) {}
+            // child.recycle() deprecated in API 34+ and no longer needed
 
 
 

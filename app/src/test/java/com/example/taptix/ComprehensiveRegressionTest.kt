@@ -449,4 +449,36 @@ class ComprehensiveRegressionTest {
             )
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 6. PHASE J0 RELIABILITY HARDENING TESTS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun testFareParser_ThousandsSeparatorsAndComplexFormats() {
+        // Thousands separator without decimal (e.g. airport or outstation fares)
+        assertEquals(1250.0, OfferParser.extractFare("Uber Premier ₹1,250 Koramangala") ?: 0.0, 0.001)
+        assertEquals(12500.0, OfferParser.extractFare("Uber Intercity ₹ 12,500 Mysore") ?: 0.0, 0.001)
+
+        // Thousands separator with decimals
+        assertEquals(2450.50, OfferParser.extractFare("Porter Truck ₹2,450.50 Whitefield") ?: 0.0, 0.001)
+
+        // Alternate currency prefixes
+        assertEquals(1800.0, OfferParser.extractFare("Ola Outstation RS. 1,800") ?: 0.0, 0.001)
+        assertEquals(450.0, OfferParser.extractFare("Rapido Auto INR 450") ?: 0.0, 0.001)
+        assertEquals(25.50, OfferParser.extractFare("Taxi $ 25.50") ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun testBookingDetectionValidator_ScreenDimensionSafety() {
+        // Normal accept button dimensions
+        assertTrue(BookingDetectionValidator.isValidButtonBounds(width = 250, height = 90))
+
+        // Accidental tap on full-screen container layout (height > 550)
+        assertFalse(BookingDetectionValidator.isValidButtonBounds(width = 1080, height = 800))
+
+        // Tiny pixel noise / microscopic elements (< 60 width or < 35 height)
+        assertFalse(BookingDetectionValidator.isValidButtonBounds(width = 40, height = 20))
+        assertFalse(BookingDetectionValidator.isValidButtonBounds(width = 200, height = 15))
+    }
 }

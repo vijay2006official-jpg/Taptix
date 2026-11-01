@@ -192,9 +192,9 @@ fun MapZoneScreen(
                         useWideViewPort = true
                         builtInZoomControls = false
                         displayZoomControls = false
-                        allowFileAccess = true
+                        allowFileAccess = false
                         cacheMode = WebSettings.LOAD_DEFAULT
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                         userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                     }
                     webChromeClient = object : WebChromeClient() {
@@ -262,7 +262,16 @@ fun MapZoneScreen(
                 }
             },
             update = { wv -> webViewRef = wv },
-            modifier = Modifier.fillMaxSize()
+                onRelease = { wv ->
+                    try {
+                        wv.stopLoading()
+                        wv.loadUrl("about:blank")
+                        wv.clearHistory()
+                        wv.removeAllViews()
+                        wv.destroy()
+                    } catch (_: Exception) {}
+                },
+                modifier = Modifier.fillMaxSize()
         )
 
         // ── 2. Map Loading Indicator
