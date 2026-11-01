@@ -38,8 +38,9 @@ class AutoAcceptIntegrationTest {
     fun configXml_keepsRequiredFlagsAndEvents() {
         val root = loadConfigXml()
         val flags = root.getAttribute("android:accessibilityFlags")
-        listOf("flagDefault", "flagRetrieveInteractiveWindows", "flagReportViewIds", "flagIncludeNotImportantViews")
+        listOf("flagDefault", "flagRetrieveInteractiveWindows", "flagReportViewIds")
             .forEach { assertTrue("Missing $it", flags.contains(it)) }
+        assertFalse("flagIncludeNotImportantViews removed to eliminate parsing overhead", flags.contains("flagIncludeNotImportantViews"))
         val events = root.getAttribute("android:accessibilityEventTypes")
         assertTrue(events.contains("typeWindowStateChanged"))
         assertTrue(events.contains("typeWindowContentChanged"))

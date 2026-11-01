@@ -1,0 +1,61 @@
+================================================================================
+TAPTIX v2.3 - GOOGLE PLAY STORE LISTING METADATA
+================================================================================
+
+APP TITLE (Max 30 characters):
+Taptix: Driver Auto Accept
+
+SHORT DESCRIPTION (Max 80 characters):
+Hands-free, smart ride and delivery acceptance with custom fare and distance filters.
+
+CATEGORY:
+Auto & Vehicles (Secondary: Productivity)
+
+TAGS:
+Rideshare, Delivery, Driver Utility, Hands-Free, Driving Safety
+
+CONTENT RATING:
+Everyone (PEGI 3 / ESRB Everyone)
+
+FULL DESCRIPTION (Max 4000 characters):
+Taptix is a driver assistance utility designed to reduce distracted driving by automating one-tap ride acceptance based on your personal preferences. Configure your minimum fare rates, maximum pickup distance, and operating zones, and let Taptix safely manage acceptance alerts hands-free.
+
+SAFETY FIRST — DISTRACTION-FREE DRIVING
+Navigating city traffic while inspecting small order alerts creates dangerous behind-the-wheel distractions. Taptix helps you keep your eyes on the road and hands on the wheel by automatically evaluating incoming booking criteria against your custom pre-configured rules.
+
+INTELLIGENT OFFER FILTERING
+• Minimum Fare Filter: Set your threshold to ignore unprofitable trips.
+• Maximum Pickup Distance: Prevent deadhead mileage by limiting how far you drive to pickups.
+• Fare-per-Kilometer Rate: Automatically accept rides that meet your target earning rate per km.
+• Service Category Controls: Filter specifically for Auto, Cab Economy, Premium, or Courier orders.
+• Smart Drop Location Filters: Identify destination keywords (e.g., Airport, Central Station) to match your route.
+
+CUSTOM MAP ZONES & GEOFENCING
+• Draw custom operating perimeters directly on an interactive map.
+• Set pickup geofence boundaries to only accept requests originating within your preferred neighborhoods.
+• Automatic geofence tolerance ensures you stay focused on your preferred operating areas.
+
+TRANSPARENT OPERATIONAL LEDGER
+• Keep track of daily operational metrics: rides detected, offers accepted, orders rejected, and total distance driven.
+• Review detailed activity logs to understand which filter rules matched incoming offers.
+• Section 10 Compliant: Strictly zero financial tracking, income calculations, or profit estimates. Taptix tracks only operational trip activity.
+
+PRIVACY & PERMISSIONS TRANSPARENCY
+• 100% On-Device Processing: Taptix does not operate servers, collect tracking metrics, or upload personal data.
+• Screen Privacy: Taptix never reads personal messages, customer names, phone numbers, or passwords.
+• Zero Third-Party Trackers: No third-party advertising SDKs, analytic trackers, or data-sharing integrations.
+
+ACCESSIBILITY SERVICE API DISCLOSURE
+Taptix uses Android's AccessibilityService API solely to provide automated ride-acceptance for drivers. 
+
+• What It Reads: Reads only incoming order popup button labels (e.g., "Accept", "Confirm") within supported driver partner applications.
+• What It Does: Simulates a single screen tap on the accept button when your configured platform rules match.
+• Privacy Guarantee: Taptix does NOT read personal messages, passwords, credit card numbers, or passenger details. No screen data is recorded, saved, or uploaded off your device.
+• Explicit Consent: Before enabling this service, an in-app prominent disclosure is displayed, requiring your explicit affirmative consent.
+
+DEVELOPER & SUPPORT CONTACT
+• Developer Name: [OWNER TO PROVIDE: e.g., Taptix Mobile Technologies]
+• Support Email: [OWNER TO PROVIDE: e.g., support@taptix.app]
+• Privacy Policy URL: [OWNER TO PROVIDE: e.g., https://yourdomain.com/privacy]
+• Physical / Mailing Address: [OWNER TO PROVIDE]
+================================================================================

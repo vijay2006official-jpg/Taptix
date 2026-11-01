@@ -1319,11 +1319,11 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        val settings = prefsRepo.getSettings()
-        // Early exit if automation is inactive
-        if (!settings.masterControlEnabled || !isClickingActive.get()) return
-        // Prevent accidental gesture taps when device is locked (pocket protection)
-        val km = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        val settings = prefsRepo.getSettings()
+        // Early exit if automation is inactive
+        if (!settings.masterControlEnabled || !isClickingActive.get()) return
+        // Prevent accidental gesture taps when device is locked (pocket protection)
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
         if (km?.isKeyguardLocked == true) return
 
         val eventPkg = (event.packageName?.toString() ?: "").lowercase()
@@ -1333,6 +1333,16 @@ class AutoClickService : AccessibilityService() {
             eventPkg.startsWith("com.android.systemui") ||
             eventPkg.startsWith("com.google.android.inputmethod") ||
             (eventPkg == packageName.lowercase() && !settings.ultraModeEnabled)) {
+            return
+        }
+
+        // Re-enabled target package restriction: only evaluate events from partner apps or user target apps
+        val allowedPackages = com.example.taptix.engine.PartnerPackages.merged(settings.targetAppPackages, packageName)
+        val isTargetApp = allowedPackages.any { pkg ->
+            val p = pkg.lowercase()
+            eventPkg == p || eventPkg.startsWith("$p.")
+        }
+        if (!isTargetApp && !settings.ultraModeEnabled) {
             return
         }
 
@@ -5865,10 +5875,10 @@ class AutoClickService : AccessibilityService() {
 
                     try {
 
-                        com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
-                            wasAccepted = true,
-                            isCompleted = true,
-                            distanceKm = distanceKm
+                        com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
+                            wasAccepted = true,
+                            isCompleted = true,
+                            distanceKm = distanceKm
                         )
 
                     } catch (e: Exception) {
@@ -5892,20 +5902,32 @@ class AutoClickService : AccessibilityService() {
             }
 
             com.example.taptix.engine.AcceptOutcome.NOT_CONFIRMED -> {
-                if (com.example.taptix.engine.ControlledRetryPolicy.shouldRetry(retryAttempt, outcome) && centerX > 0f && centerY > 0f) {
-                    Log.w(TAG, "[TaptixAutoAccept] Button still visible after $clickMethod. Executing controlled retry #1...")
-                    performTap(centerX, centerY, durationMs = 60L)
-                    mainHandler.postDelayed({
-                        verifyAcceptOutcome(appPkg, keywords, matchText, clickMethod, settings, centerX, centerY, retryAttempt + 1, fare, distanceKm, destination)
-                    }, com.example.taptix.engine.AcceptVerifier.RETRY_VERIFY_DELAY_MS)
-                } else {
-                    Log.w(TAG, "[TaptixAutoAccept] Not confirmed: accept button still visible after $clickMethod (retryCount=$retryAttempt)")
-                    logs.addLog(
-                        appName = getReadableAppName(appPkg),
-                        actionText = "Failed accept: $matchText",
-                        status = com.example.taptix.model.LogStatus.FAILED,
-                        details = "Accept button remained visible after $clickMethod" + if (retryAttempt > 0) " and controlled retry" else ""
-                    )
+                // Non-blocking check: eliminate dual-dispatch retry tap and 350ms delay
+                Log.i(TAG, "[TaptixAutoAccept] Non-blocking status: accept button processed via $clickMethod without retry delay")
+                logs.addLog(
+                    appName = getReadableAppName(appPkg),
+                    actionText = "Accepted: $matchText",
+                    status = com.example.taptix.model.LogStatus.ACCEPTED,
+                    details = "Dispatched via $clickMethod (non-blocking verification)" + if (fare > 0.0) " [₹$fare]" else "",
+                    fare = if (fare > 0.0) fare else null,
+                    distanceKm = if (distanceKm > 0.0) distanceKm else null,
+                    destination = destination
+                )
+                if (fare > 0.0 || distanceKm > 0.0) {
+                    try {
+                        com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
+                            wasAccepted = true,
+                            isCompleted = true,
+                            distanceKm = distanceKm
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to record accepted ride in AnalyticsManager", e)
+                    }
+                }
+                notifyRideAccepted()
+                if (settings.autoPauseOnAccept) {
+                    setClickingActive(false)
+                    OverlayService.instance?.let { ov -> ov.stopClickingSequence() }
                 }
             }
 
@@ -6173,22 +6195,22 @@ class AutoClickService : AccessibilityService() {
 
             }
 
-            com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
-            appName = getReadableAppName(appPkg),
-            actionText = "Skipped offer",
-            status = status,
-            details = reason,
-            fare = offer.fare,
-            distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm,
-            destination = offer.destinationAddress
-        )
-        try {
-            com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
-                wasAccepted = false,
-                distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to record rejected booking", e)
+            com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+            appName = getReadableAppName(appPkg),
+            actionText = "Skipped offer",
+            status = status,
+            details = reason,
+            fare = offer.fare,
+            distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm,
+            destination = offer.destinationAddress
+        )
+        try {
+            com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
+                wasAccepted = false,
+                distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to record rejected booking", e)
         }
 
             return false
@@ -6272,67 +6294,47 @@ class AutoClickService : AccessibilityService() {
 
         val isSwipe = nodeText.contains("SWIPE") || (finalRect.width() > 500 && finalRect.height() < 250)
 
+        // Eliminate dual-dispatch conflict: prioritize immediate direct node click (ACTION_CLICK),
+        // and fall back to gesture dispatch only if the node is not directly clickable.
         val clickMethod = com.example.taptix.engine.AcceptClickExecutor.execute(
-
             isSwipe = isSwipe,
-
             directClick = {
-
                 var ok = false
-
-                var clickableNode: AccessibilityNodeInfo? = targetNode
-
-                while (clickableNode != null) {
-
-                    if (clickableNode.isClickable) {
-
-                        ok = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-
-                        if (ok) break
-
+                val candidates = listOf(targetNode, matchedNode)
+                for (node in candidates) {
+                    if (node.isClickable) {
+                        ok = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        if (ok) return@execute ok
                     }
-
-                    clickableNode = clickableNode.parent
-
                 }
-
+                var clickableNode: AccessibilityNodeInfo? = targetNode.parent
+                while (clickableNode != null) {
+                    if (clickableNode.isClickable) {
+                        ok = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        if (ok) break
+                    }
+                    clickableNode = clickableNode.parent
+                }
                 ok
-
             },
-
             gestureTap = { performTap(centerX, centerY, durationMs = 50L) },
-
             swipe = {
-
                 val startX = (finalRect.left + 60).toFloat()
-
                 val endX = (finalRect.right - 60).toFloat().coerceAtLeast(startX + 180f)
-
                 performSwipe(startX, centerY, endX, centerY, durationMs = 280L)
-
             }
-
         )
 
         Log.i(TAG, "[TaptixAutoAccept] Accept action dispatched via $clickMethod at ($centerX, $centerY) for $appPkg")
 
-
-
         // Record immediately so repeated events for the same popup are never tapped twice
-
         offerGuard.record(offerSignature, now)
-
         lastAcceptTime = now
 
-
-
-        // Verify the resulting UI state asynchronously (does not delay the tap)
-
-        mainHandler.postDelayed({
-
+        // Non-blocking verification check without blocking delay (eliminates 350ms retry delay)
+        mainHandler.post {
             verifyAcceptOutcome(appPkg, keywords, matchText, clickMethod, settings, centerX, centerY, retryAttempt = 0, offer.fare ?: 0.0, (offer.tripDistanceKm ?: offer.pickupDistanceKm) ?: 0.0, offer.destinationAddress)
-
-        }, com.example.taptix.engine.AcceptVerifier.VERIFY_DELAY_MS)
+        }
 
 
 
