@@ -3064,7 +3064,7 @@ class AutoClickService : AccessibilityService() {
             clickSucceeded = true
             Log.i(TAG, "[TaptixAutoAccept] Executed accept swipe gesture ($startX -> $endX, $centerY)")
         } else {
-            // Action 1: Native accessibility click
+            // Prioritize immediate direct node click (ACTION_CLICK)
             var nativeClickOk = false
             var clickableNode: AccessibilityNodeInfo? = targetNode
             while (clickableNode != null) {
@@ -3075,10 +3075,15 @@ class AutoClickService : AccessibilityService() {
                 clickableNode = clickableNode.parent
             }
 
-            // Action 2: Always synthesize gesture tap at exact screen coordinates (crucial for Flutter / Compose apps like Rapido & Namma Yatri)
-            performTap(centerX, centerY, durationMs = 80L)
-            clickSucceeded = true
-            Log.i(TAG, "[TaptixAutoAccept] Executed accept tap (native=$nativeClickOk, gesture tap=true at $centerX, $centerY)")
+            if (nativeClickOk) {
+                clickSucceeded = true
+                Log.i(TAG, "[TaptixAutoAccept] Executed immediate direct node click (ACTION_CLICK)")
+            } else {
+                // Fall back to gesture dispatch if node is not directly clickable
+                performTap(centerX, centerY, durationMs = 50L)
+                clickSucceeded = true
+                Log.i(TAG, "[TaptixAutoAccept] Node not directly clickable, executed fallback gesture tap at ($centerX, $centerY)")
+            }
         }
 
         if (clickSucceeded) {
@@ -3096,24 +3101,7 @@ class AutoClickService : AccessibilityService() {
 
             notifyRideAccepted()
 
-            // Controlled verification and retry: check 350ms later if accept button is still showing
-            mainHandler.postDelayed({
-                try {
-                    val currentRoot = rootInActiveWindow
-                    if (currentRoot != null) {
-                        val stillThere = findNodeWithKeywords(currentRoot, keywords)
-                        if (stillThere != null) {
-                            Log.w(TAG, "[TaptixAutoAccept] Booking accept button still present after 350ms, executing retry tap")
-                            performTap(centerX, centerY, durationMs = 120L)
-                        } else {
-                            Log.i(TAG, "[TaptixAutoAccept] Booking accept confirmed - screen transitioned successfully")
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "[TaptixAutoAccept] Verification retry check error: ${e.message}")
-                }
-            }, 350L)
-
+            
             if (settings.autoPauseOnAccept) {
                 setClickingActive(false)
                 OverlayService.instance?.let { ov ->

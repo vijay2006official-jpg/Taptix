@@ -1421,7 +1421,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
 
-            // ── 3. SHIFT SCHEDULE & DAILY STATS (Phase 5 Item 30 & 31)
+            // ── 3. DAILY STATS
 
 
 
