@@ -15,5 +15,6 @@ data class OfferDetails(
     val pickupAddress: String = "",
     val destinationAddress: String = "",
     val acceptNode: AccessibilityNodeInfo? = null,
-    val isSwipeAction: Boolean = false
+    val isSwipeAction: Boolean = false,
+    val detectedCategory: String? = null
 )

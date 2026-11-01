@@ -1698,17 +1698,15 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
                             Text("SMART OFFER CRITERIA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
 
-
-
                             val fareDesc = if (smartRules.minFareEnabled) "Min ₹${smartRules.minFareAmount.toInt()}" else "Fare: Any"
-
-
 
                             val distDesc = if (smartRules.maxPickupDistanceEnabled) "Max ${smartRules.maxPickupDistanceKm}km" else "Dist: Any"
 
+                            val rateDesc = if (smartRules.minFarePerKmEnabled) " • ₹${smartRules.minFarePerKmAmount.toInt()}/km" else ""
 
+                            val catDesc = if (smartRules.categoryFilterEnabled) " • ${smartRules.allowedCategories.size} Tiers" else ""
 
-                            Text("$fareDesc • $distDesc", color = BrandCyan, fontSize = 11.sp)
+                            Text("$fareDesc • $distDesc$rateDesc$catDesc", color = BrandCyan, fontSize = 11.sp)
 
 
 
