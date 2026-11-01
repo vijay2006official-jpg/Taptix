@@ -240,6 +240,10 @@ import com.example.taptix.ui.components.DailyStatsCard
 
 import com.example.taptix.ui.components.DiagnosticItem
 import com.example.taptix.ui.components.SelfCheckCard
+import com.example.taptix.data.AnalyticsManager
+import com.example.taptix.ui.components.DriverDashboardCard
+import com.example.taptix.ui.components.AnalyticsDialog
+import com.example.taptix.ui.components.BookingHistoryDialog
 
 
 
@@ -533,6 +537,8 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
     var showSmartRulesDialog by remember { mutableStateOf(false) }
+    var showAnalyticsDialog by remember { mutableStateOf(false) }
+    var showBookingHistoryDialog by remember { mutableStateOf(false) }
 
 
 
@@ -567,6 +573,8 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
     var activityLogs by remember { mutableStateOf(logManager.getLogs()) }
+    val analyticsManager = remember { AnalyticsManager.getInstance(context) }
+    var todayAnalyticsRecord by remember { mutableStateOf(analyticsManager.getTodayRecord()) }
 
 
 
@@ -588,6 +596,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
         appSettings       = prefsRepo.getSettings()
         activityLogs      = logManager.getLogs()
+        todayAnalyticsRecord = analyticsManager.getTodayRecord()
 
 
 
@@ -692,6 +701,8 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
             if (event == Lifecycle.Event.ON_RESUME) {
 
                 refreshDiagnostics()
+                analyticsManager.syncFromLogs(logManager.getLogs())
+                todayAnalyticsRecord = analyticsManager.getTodayRecord()
 
                 if (prefsRepo.isFloatingDockEnabled() && Settings.canDrawOverlays(context) && OverlayService.instance == null) {
                     OverlayService.showService(context)
@@ -867,6 +878,23 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
 
+    }
+
+    if (showAnalyticsDialog) {
+        AnalyticsDialog(
+            analyticsManager = analyticsManager,
+            onDismiss = {
+                showAnalyticsDialog = false
+                todayAnalyticsRecord = analyticsManager.getTodayRecord()
+            }
+        )
+    }
+
+    if (showBookingHistoryDialog) {
+        BookingHistoryDialog(
+            logManager = logManager,
+            onDismiss = { showBookingHistoryDialog = false }
+        )
     }
 
 
@@ -1109,6 +1137,20 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
             }
 
 
+
+            // ── DRIVER DASHBOARD & ANALYTICS (Phase F)
+            DriverDashboardCard(
+                isOnline = isServiceRunning || isAccessibilityOn,
+                isAutomationActive = appSettings.masterControlEnabled && isAccessibilityOn,
+                activeZoneName = if (isTargetAreasActive) prefsRepo.getActiveZones().firstOrNull()?.name ?: "Target Areas Active" else null,
+                todayRecord = todayAnalyticsRecord,
+                onOpenMap = { context.startActivity(Intent(context, MapZoneActivity::class.java)) },
+                onOpenRules = { showSmartRulesDialog = true },
+                onOpenAnalytics = { showAnalyticsDialog = true },
+                onOpenHistory = { showBookingHistoryDialog = true }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // ── 0. DIAGNOSTICS & PERMISSION SELF-CHECK (Phase 4 Item 27)
 

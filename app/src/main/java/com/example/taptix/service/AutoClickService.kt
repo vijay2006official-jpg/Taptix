@@ -5865,7 +5865,10 @@ class AutoClickService : AccessibilityService() {
         settings: com.example.taptix.data.AppSettings,
         centerX: Float = 0f,
         centerY: Float = 0f,
-        retryAttempt: Int = 0
+        retryAttempt: Int = 0,
+        fare: Double = 0.0,
+        distanceKm: Double = 0.0,
+        destination: String = ""
     ) {
 
         val stillVisible = try { isAcceptButtonStillVisible(appPkg, keywords) } catch (e: Exception) { null }
@@ -5888,9 +5891,34 @@ class AutoClickService : AccessibilityService() {
 
                     status = com.example.taptix.model.LogStatus.ACCEPTED,
 
-                    details = "Booking popup closed after tap ($clickMethod)"
+                    details = "Booking popup closed after tap ($clickMethod)" + if (fare > 0.0) " [₹$fare]" else "",
+
+                    fare = if (fare > 0.0) fare else null,
+
+                    distanceKm = if (distanceKm > 0.0) distanceKm else null,
+
+                    destination = destination
 
                 )
+
+                if (fare > 0.0 || distanceKm > 0.0) {
+
+                    try {
+
+                        com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
+                            fare = fare,
+                            distanceKm = distanceKm,
+                            wasAccepted = true,
+                            isCompleted = true
+                        )
+
+                    } catch (e: Exception) {
+
+                        Log.e(TAG, "Failed to record accepted ride in AnalyticsManager", e)
+
+                    }
+
+                }
 
                 notifyRideAccepted()
 
@@ -5909,7 +5937,7 @@ class AutoClickService : AccessibilityService() {
                     Log.w(TAG, "[TaptixAutoAccept] Button still visible after $clickMethod. Executing controlled retry #1...")
                     performTap(centerX, centerY, durationMs = 60L)
                     mainHandler.postDelayed({
-                        verifyAcceptOutcome(appPkg, keywords, matchText, clickMethod, settings, centerX, centerY, retryAttempt + 1)
+                        verifyAcceptOutcome(appPkg, keywords, matchText, clickMethod, settings, centerX, centerY, retryAttempt + 1, fare, distanceKm, destination)
                     }, com.example.taptix.engine.AcceptVerifier.RETRY_VERIFY_DELAY_MS)
                 } else {
                     Log.w(TAG, "[TaptixAutoAccept] Not confirmed: accept button still visible after $clickMethod (retryCount=$retryAttempt)")
@@ -6186,17 +6214,24 @@ class AutoClickService : AccessibilityService() {
 
             }
 
-            com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
-
-                appName = getReadableAppName(appPkg),
-
-                actionText = "Skipped offer",
-
-                status = status,
-
-                details = reason
-
-            )
+            com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
+            appName = getReadableAppName(appPkg),
+            actionText = "Skipped offer",
+            status = status,
+            details = reason,
+            fare = offer.fare,
+            distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm,
+            destination = offer.destinationAddress
+        )
+        try {
+            com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
+                fare = offer.fare,
+                distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm,
+                wasAccepted = false
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to record rejected booking", e)
+        }
 
             return false
 
@@ -6337,7 +6372,7 @@ class AutoClickService : AccessibilityService() {
 
         mainHandler.postDelayed({
 
-            verifyAcceptOutcome(appPkg, keywords, matchText, clickMethod, settings, centerX, centerY, retryAttempt = 0)
+            verifyAcceptOutcome(appPkg, keywords, matchText, clickMethod, settings, centerX, centerY, retryAttempt = 0, offer.fare ?: 0.0, (offer.tripDistanceKm ?: offer.pickupDistanceKm) ?: 0.0, offer.destinationAddress)
 
         }, com.example.taptix.engine.AcceptVerifier.VERIFY_DELAY_MS)
 
