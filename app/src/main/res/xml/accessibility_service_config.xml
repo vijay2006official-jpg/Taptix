@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- packageNames must stay in sync with engine/AutoAcceptCore.kt PartnerPackages.SUPPORTED (checked by unit test).
+     User-configured target apps are added at runtime in AutoClickService.applyPartnerPackageFilter(). -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
@@ -7,4 +9,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"
-    android:packageNames="com.ubercab.driver,com.olacabs.driver,com.olacabs.partner,com.rapido.captain,com.rapido.passenger,sinet.startup.inDriver,com.indriver,in.juspay.nammayatripartner,movingtech.nammatrip.driver,movingtech.nammayatri.driver,in.juspay.nammayatri,in.juspay.yatrisathi,in.porter.partner,com.theporter.partner,me.lyft.driver,com.grabtaxi.driver2,com.dd.driver,com.example.taptix" />
+    android:packageNames="com.ubercab.driver,com.olacabs.oladriver,com.olacabs.driver,com.olacabs.partner,com.rapido.rider,com.rapido.captain,com.rapido.passenger,sinet.startup.inDriver,com.indriver,in.juspay.nammayatripartner,movingtech.nammatrip.driver,movingtech.nammayatri.driver,in.juspay.nammayatri,in.juspay.yatrisathi,com.theporter.android.driverapp,in.porter.partner,com.theporter.partner,me.lyft.driver,com.grabtaxi.driver2,com.dd.driver,com.example.taptix" />
