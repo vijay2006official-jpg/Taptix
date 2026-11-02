@@ -333,6 +333,7 @@ class MainActivity : ComponentActivity() {
 
 
 
+    @Suppress("DEPRECATION")
     private fun checkForAppUpdate() {
 
         val appUpdateInfoTask = appUpdateManager.appUpdateInfo
@@ -377,6 +378,7 @@ class MainActivity : ComponentActivity() {
 
 
 
+    @Suppress("DEPRECATION")
     override fun onResume() {
 
         super.onResume()
@@ -419,6 +421,7 @@ class MainActivity : ComponentActivity() {
 
     @Deprecated("Deprecated in Java")
 
+    @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
 
         super.onActivityResult(requestCode, resultCode, data)
