@@ -663,6 +663,7 @@ class AutoClickService : AccessibilityService() {
 
 
     private val offerGuard = com.example.taptix.engine.DuplicateOfferGuard()
+    @Volatile private var currentBookingStateMachine: com.example.taptix.engine.BookingStateMachine? = null
     private var lastEventScanTime = 0L
 
 
@@ -1031,6 +1032,8 @@ class AutoClickService : AccessibilityService() {
 
 
 
+        currentBookingStateMachine?.resetOnInterruption("SERVICE_DESTROYED")
+        currentBookingStateMachine = null
         isServiceRunning.set(false)
         isClickingActive.set(false)
         engineState = com.example.taptix.engine.AutomationEngineState.DISCONNECTED
@@ -2261,37 +2264,9 @@ class AutoClickService : AccessibilityService() {
 
 
     override fun onInterrupt() {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         stopClicking()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        currentBookingStateMachine?.resetOnInterruption("ACCESSIBILITY_SERVICE_INTERRUPTED")
+        currentBookingStateMachine = null
     }
 
 
@@ -5838,124 +5813,98 @@ class AutoClickService : AccessibilityService() {
         retryAttempt: Int = 0,
         fare: Double = 0.0,
         distanceKm: Double = 0.0,
-        destination: String = ""
+        destination: String = "",
+        stateMachine: com.example.taptix.engine.BookingStateMachine? = null
     ) {
 
         val stillVisible = try { isAcceptButtonStillVisible(appPkg, keywords) } catch (e: Exception) { null }
-
         val outcome = com.example.taptix.engine.AcceptVerifier.evaluate(stillVisible)
-
         val logs = com.example.taptix.data.ActivityLogManager.getInstance(applicationContext)
 
         when (outcome) {
-
             com.example.taptix.engine.AcceptOutcome.CONFIRMED -> {
+                stateMachine?.onVerificationResult(outcome)
+                stateMachine?.onBookingCompleted()
 
                 Log.i(TAG, "[TaptixAutoAccept] Verified: booking popup closed after $clickMethod")
 
                 logs.addLog(
-
                     appName = getReadableAppName(appPkg),
-
                     actionText = "Accepted: $matchText",
-
                     status = com.example.taptix.model.LogStatus.ACCEPTED,
-
                     details = "Booking popup closed after tap ($clickMethod)" + if (fare > 0.0) " [₹$fare]" else "",
-
                     fare = if (fare > 0.0) fare else null,
-
                     distanceKm = if (distanceKm > 0.0) distanceKm else null,
-
                     destination = destination
-
                 )
 
                 if (fare > 0.0 || distanceKm > 0.0) {
-
                     try {
-
                         com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
                             wasAccepted = true,
                             isCompleted = true,
                             distanceKm = distanceKm
                         )
-
                     } catch (e: Exception) {
-
                         Log.e(TAG, "Failed to record accepted ride in AnalyticsManager", e)
-
                     }
-
                 }
 
                 notifyRideAccepted()
 
                 if (settings.autoPauseOnAccept) {
-
                     setClickingActive(false)
-
                     OverlayService.instance?.let { ov -> ov.stopClickingSequence() }
-
                 }
-
             }
 
             com.example.taptix.engine.AcceptOutcome.NOT_CONFIRMED -> {
-                // Non-blocking check: eliminate dual-dispatch retry tap and 350ms delay
-                Log.i(TAG, "[TaptixAutoAccept] Non-blocking status: accept button processed via $clickMethod without retry delay")
+                if (com.example.taptix.engine.ControlledRetryPolicy.shouldRetry(retryAttempt, outcome)) {
+                    Log.i(TAG, "[TaptixAutoAccept] Accept button still visible after tap, attempting controlled retry #1")
+                    val currentForegroundPkg = rootInActiveWindow?.packageName?.toString() ?: ""
+                    val isStillPartner = currentForegroundPkg.isBlank() || currentForegroundPkg.contains(appPkg, ignoreCase = true)
+                    if (isStillPartner && centerX > 0f && centerY > 0f) {
+                        stateMachine?.onClickAttempted(com.example.taptix.engine.ClickMethod.GESTURE_FALLBACK)
+                        performTap(centerX, centerY, durationMs = 60L)
+                        mainHandler.postDelayed({
+                            verifyAcceptOutcome(
+                                appPkg, keywords, matchText, clickMethod, settings,
+                                centerX, centerY, retryAttempt = retryAttempt + 1,
+                                fare, distanceKm, destination, stateMachine
+                            )
+                        }, com.example.taptix.engine.AcceptVerifier.RETRY_VERIFY_DELAY_MS)
+                        return
+                    }
+                }
+
+                stateMachine?.onVerificationResult(outcome)
+                Log.w(TAG, "[TaptixAutoAccept] Accept NOT confirmed: booking popup remained visible after tap/retry")
                 logs.addLog(
                     appName = getReadableAppName(appPkg),
-                    actionText = "Accepted: $matchText",
-                    status = com.example.taptix.model.LogStatus.ACCEPTED,
-                    details = "Dispatched via $clickMethod (non-blocking verification)" + if (fare > 0.0) " [₹$fare]" else "",
+                    actionText = "Attempted: $matchText",
+                    status = com.example.taptix.model.LogStatus.ATTEMPTED,
+                    details = "Button remained visible after tap ($clickMethod) — not accepted" + if (fare > 0.0) " [₹$fare]" else "",
                     fare = if (fare > 0.0) fare else null,
                     distanceKm = if (distanceKm > 0.0) distanceKm else null,
                     destination = destination
                 )
-                if (fare > 0.0 || distanceKm > 0.0) {
-                    try {
-                        com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
-                            wasAccepted = true,
-                            isCompleted = true,
-                            distanceKm = distanceKm
-                        )
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to record accepted ride in AnalyticsManager", e)
-                    }
-                }
-                notifyRideAccepted()
-                if (settings.autoPauseOnAccept) {
-                    setClickingActive(false)
-                    OverlayService.instance?.let { ov -> ov.stopClickingSequence() }
-                }
             }
 
             com.example.taptix.engine.AcceptOutcome.UNKNOWN -> {
-
+                stateMachine?.onVerificationResult(outcome)
                 Log.w(TAG, "[TaptixAutoAccept] Could not read screen to verify accept ($clickMethod)")
 
                 logs.addLog(
-
                     appName = getReadableAppName(appPkg),
-
                     actionText = "Tap sent: $matchText",
-
                     status = com.example.taptix.model.LogStatus.ATTEMPTED,
-
                     details = "Screen could not be read to verify result ($clickMethod)"
-
                 )
-
             }
-
         }
-
     }
 
-
-
-        private fun findAndExecuteAccept(
+    private fun findAndExecuteAccept(
 
         rootNode: AccessibilityNodeInfo,
 
@@ -6217,7 +6166,16 @@ class AutoClickService : AccessibilityService() {
 
         }
 
+        val stateMachine = com.example.taptix.engine.BookingStateMachine(offerSignature, offerGuard)
+        stateMachine.onFilterEvaluated(matched = true)
+        currentBookingStateMachine = stateMachine
 
+        // Atomic check-or-record before executing any click actions to guarantee race-condition safety
+        if (offerGuard.isDuplicateOrRecord(offerSignature, now)) {
+            Log.d(TAG, "[TaptixAutoAccept] Duplicate booking race-condition detected and suppressed: $offerSignature")
+            stateMachine.resetOnInterruption("DUPLICATE_CONCURRENCY_SUPPRESSED")
+            return false
+        }
 
         // Identify the exact clickable button (avoiding full-screen parent layouts)
 
@@ -6325,18 +6283,18 @@ class AutoClickService : AccessibilityService() {
             }
         )
 
+        stateMachine.onClickAttempted(clickMethod)
+        lastAcceptTime = now
         Log.i(TAG, "[TaptixAutoAccept] Accept action dispatched via $clickMethod at ($centerX, $centerY) for $appPkg")
 
-        // Record immediately so repeated events for the same popup are never tapped twice
-        offerGuard.record(offerSignature, now)
-        lastAcceptTime = now
-
-        // Non-blocking verification check without blocking delay (eliminates 350ms retry delay)
-        mainHandler.post {
-            verifyAcceptOutcome(appPkg, keywords, matchText, clickMethod, settings, centerX, centerY, retryAttempt = 0, offer.fare ?: 0.0, (offer.tripDistanceKm ?: offer.pickupDistanceKm) ?: 0.0, offer.destinationAddress)
-        }
-
-
+        mainHandler.postDelayed({
+            verifyAcceptOutcome(
+                appPkg, keywords, matchText, clickMethod, settings,
+                centerX, centerY, retryAttempt = 0,
+                offer.fare ?: 0.0, (offer.tripDistanceKm ?: offer.pickupDistanceKm) ?: 0.0,
+                offer.destinationAddress, stateMachine
+            )
+        }, com.example.taptix.engine.AcceptVerifier.VERIFY_DELAY_MS)
 
         return true
 

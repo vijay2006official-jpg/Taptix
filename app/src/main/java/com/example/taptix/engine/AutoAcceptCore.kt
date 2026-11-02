@@ -258,6 +258,7 @@ class BookingStateMachine(
 
     @Synchronized
     fun onVerificationResult(outcome: AcceptOutcome): Boolean {
+        if (failureReason != null) return false
         if (currentState != BookingState.CLICK_ATTEMPTED) return false
         return when (outcome) {
             AcceptOutcome.CONFIRMED -> {
@@ -283,6 +284,7 @@ class BookingStateMachine(
 
     @Synchronized
     fun onBookingCompleted(): Boolean {
+        if (failureReason != null) return false
         if (currentState != BookingState.ACCEPTANCE_CONFIRMED) return false
         currentState = BookingState.BOOKING_COMPLETED
         return true
