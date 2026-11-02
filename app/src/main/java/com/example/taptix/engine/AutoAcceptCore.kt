@@ -66,6 +66,22 @@ class DuplicateOfferGuard(private val windowMs: Long = DEFAULT_WINDOW_MS) {
         lastTimestamp = now
     }
 
+    /**
+     * Atomically checks if an offer signature is duplicate within [windowMs].
+     * If duplicate, returns true.
+     * If unique (not duplicate), atomically records it and returns false.
+     * Guarantees race-condition safety under simultaneous thread arrivals.
+     */
+    @Synchronized
+    fun isDuplicateOrRecord(signature: String, now: Long): Boolean {
+        if (signature == lastSignature && (now - lastTimestamp) < windowMs) {
+            return true
+        }
+        lastSignature = signature
+        lastTimestamp = now
+        return false
+    }
+
     companion object {
         const val DEFAULT_WINDOW_MS = 4000L
 
@@ -179,3 +195,104 @@ enum class AutomationEngineState {
     ACCEPTED_CONFIRMED,
     PAUSED_BY_USER
 }
+
+/**
+ * Formal 5-state booking lifecycle for strict accuracy and zero-duplicate guarantees.
+ * Required by Phase O2 validation.
+ */
+enum class BookingState {
+    BOOKING_DETECTED,
+    FILTER_MATCHED,
+    CLICK_ATTEMPTED,
+    ACCEPTANCE_CONFIRMED,
+    BOOKING_COMPLETED
+}
+
+/**
+ * State machine managing booking lifecycle transitions with strict invariant verification:
+ * - A detected booking is NOT considered accepted.
+ * - A click attempt is NOT counted as confirmed acceptance until post-tap verification succeeds.
+ * - Failed or timeout actions never transition to confirmed.
+ * - Concurrency-safe and idempotent against duplicate / out-of-order events.
+ */
+class BookingStateMachine(
+    val bookingId: String,
+    val duplicateGuard: DuplicateOfferGuard = DuplicateOfferGuard()
+) {
+    var currentState: BookingState = BookingState.BOOKING_DETECTED
+        private set
+
+    var clickAttempts: Int = 0
+        private set
+
+    var failureReason: String? = null
+        private set
+
+    val isAccepted: Boolean
+        get() = currentState == BookingState.ACCEPTANCE_CONFIRMED || currentState == BookingState.BOOKING_COMPLETED
+
+    val isTerminal: Boolean
+        get() = currentState == BookingState.BOOKING_COMPLETED || failureReason != null
+
+    @Synchronized
+    fun onFilterEvaluated(matched: Boolean, reason: String? = null): Boolean {
+        if (currentState != BookingState.BOOKING_DETECTED) return false
+        return if (matched) {
+            currentState = BookingState.FILTER_MATCHED
+            true
+        } else {
+            failureReason = reason ?: "FILTER_REJECTED"
+            false
+        }
+    }
+
+    @Synchronized
+    fun onClickAttempted(method: ClickMethod): Boolean {
+        if (failureReason != null) return false
+        if (clickAttempts > ControlledRetryPolicy.MAX_RETRIES) return false
+        if (currentState != BookingState.FILTER_MATCHED && currentState != BookingState.CLICK_ATTEMPTED) return false
+        clickAttempts++
+        currentState = BookingState.CLICK_ATTEMPTED
+        return true
+    }
+
+    @Synchronized
+    fun onVerificationResult(outcome: AcceptOutcome): Boolean {
+        if (currentState != BookingState.CLICK_ATTEMPTED) return false
+        return when (outcome) {
+            AcceptOutcome.CONFIRMED -> {
+                currentState = BookingState.ACCEPTANCE_CONFIRMED
+                true
+            }
+            AcceptOutcome.NOT_CONFIRMED -> {
+                val retriesUsed = clickAttempts - 1
+                if (ControlledRetryPolicy.shouldRetry(retriesUsed, outcome)) {
+                    // Allowed exactly 1 retry: remain in CLICK_ATTEMPTED
+                    false
+                } else {
+                    failureReason = "ACCEPTANCE_NOT_CONFIRMED"
+                    false
+                }
+            }
+            AcceptOutcome.UNKNOWN -> {
+                failureReason = "VERIFICATION_TIMEOUT_OR_UNKNOWN"
+                false
+            }
+        }
+    }
+
+    @Synchronized
+    fun onBookingCompleted(): Boolean {
+        if (currentState != BookingState.ACCEPTANCE_CONFIRMED) return false
+        currentState = BookingState.BOOKING_COMPLETED
+        return true
+    }
+
+    @Synchronized
+    fun resetOnInterruption(reason: String) {
+        if (!isAccepted) {
+            failureReason = "INTERRUPTED: $reason"
+        }
+    }
+}
+

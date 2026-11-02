@@ -51,6 +51,7 @@ object OfferParser {
 
     fun extractFare(text: String): Double? {
         val match = FARE_REGEX.find(text) ?: return null
+        if (match.range.first > 0 && text[match.range.first - 1] == '-') return null
         val raw = match.groupValues[1].trim()
         val cleanStr = when {
             raw.contains(",") && raw.contains(".") -> raw.replace(",", "")
@@ -64,7 +65,7 @@ object OfferParser {
             }
             else -> raw
         }
-        return cleanStr.toDoubleOrNull()
+        return validateFare(cleanStr.toDoubleOrNull())
     }
 
     /**
