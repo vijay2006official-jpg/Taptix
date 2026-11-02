@@ -5,6 +5,7 @@ import com.example.taptix.engine.AcceptClickExecutor
 import com.example.taptix.engine.AcceptOutcome
 import com.example.taptix.engine.AcceptVerifier
 import com.example.taptix.engine.ClickMethod
+import com.example.taptix.engine.DirectClickResult
 import com.example.taptix.engine.DuplicateOfferGuard
 import com.example.taptix.engine.OfferParser
 import com.example.taptix.engine.OfferRuleEngine
@@ -120,24 +121,64 @@ class AutoAcceptIntegrationTest {
     @Test
     fun click_directClickSucceeds_noGestureDispatched() {
         var gestures = 0; var swipes = 0
-        val m = AcceptClickExecutor.execute(false, directClick = { true }, gestureTap = { gestures++ }, swipe = { swipes++ })
+        val m = AcceptClickExecutor.execute(false, directClick = { DirectClickResult.SUCCESS }, gestureTap = { gestures++ }, swipe = { swipes++ })
         assertEquals(ClickMethod.DIRECT_CLICK, m)
         assertEquals("Must not double-dispatch a gesture after a successful click", 0, gestures)
         assertEquals(0, swipes)
     }
 
     @Test
+    fun click_explicitDirectSuccess_noGestureFallback() {
+        var gestures = 0; var swipes = 0
+        val m = AcceptClickExecutor.execute(
+            isSwipe = false,
+            directClick = { DirectClickResult.SUCCESS },
+            gestureTap = { gestures++ },
+            swipe = { swipes++ }
+        )
+        assertEquals(ClickMethod.DIRECT_CLICK, m)
+        assertEquals(0, gestures)
+        assertEquals(0, swipes)
+    }
+
+    @Test
     fun click_directClickFails_exactlyOneGestureFallback() {
         var gestures = 0
-        val m = AcceptClickExecutor.execute(false, directClick = { false }, gestureTap = { gestures++ }, swipe = { fail("no swipe") })
+        val m = AcceptClickExecutor.execute(false, directClick = { DirectClickResult.FAILED_CONFIRMED_NOT_DISPATCHED }, gestureTap = { gestures++ }, swipe = { fail("no swipe") })
         assertEquals(ClickMethod.GESTURE_FALLBACK, m)
         assertEquals(1, gestures)
     }
 
     @Test
+    fun click_explicitConfirmedNotDispatched_exactlyOneGestureFallback() {
+        var gestures = 0
+        val m = AcceptClickExecutor.execute(
+            isSwipe = false,
+            directClick = { DirectClickResult.FAILED_CONFIRMED_NOT_DISPATCHED },
+            gestureTap = { gestures++ },
+            swipe = { fail("no swipe") }
+        )
+        assertEquals(ClickMethod.GESTURE_FALLBACK, m)
+        assertEquals(1, gestures)
+    }
+
+    @Test
+    fun click_explicitUnknownOutcome_neverDispatchesGestureFallback() {
+        var gestures = 0
+        val m = AcceptClickExecutor.execute(
+            isSwipe = false,
+            directClick = { DirectClickResult.UNKNOWN },
+            gestureTap = { gestures++; fail("Gesture must NEVER be dispatched on UNKNOWN direct click outcome") },
+            swipe = { fail("no swipe") }
+        )
+        assertEquals(ClickMethod.UNKNOWN_DISPATCH, m)
+        assertEquals("Must not dispatch gesture fallback when direct click result is uncertain", 0, gestures)
+    }
+
+    @Test
     fun click_swipeControl_onlySwipes() {
         var directCalls = 0; var gestures = 0; var swipes = 0
-        val m = AcceptClickExecutor.execute(true, directClick = { directCalls++; true }, gestureTap = { gestures++ }, swipe = { swipes++ })
+        val m = AcceptClickExecutor.execute(true, directClick = { directCalls++; DirectClickResult.SUCCESS }, gestureTap = { gestures++ }, swipe = { swipes++ })
         assertEquals(ClickMethod.SWIPE, m)
         assertEquals(1, swipes); assertEquals(0, directCalls); assertEquals(0, gestures)
     }

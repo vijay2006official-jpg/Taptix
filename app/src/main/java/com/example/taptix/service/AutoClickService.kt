@@ -6312,27 +6312,40 @@ class AutoClickService : AccessibilityService() {
         val isSwipe = nodeText.contains("SWIPE") || nodeText.contains("SLIDE") || (matchedNode.className?.toString() ?: "").contains("SeekBar", ignoreCase = true)
 
         // Eliminate dual-dispatch conflict: prioritize immediate direct node click (ACTION_CLICK),
-        // and fall back to gesture dispatch only if the node is not directly clickable.
+        // and fall back to gesture dispatch ONLY when direct action non-dispatch is reliably confirmed.
         val clickMethod = com.example.taptix.engine.AcceptClickExecutor.execute(
             isSwipe = isSwipe,
             directClick = {
-                var ok = false
                 val candidates = listOf(targetNode, matchedNode)
                 for (node in candidates) {
                     if (node.isClickable) {
-                        ok = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        if (ok) return@execute ok
+                        val ok = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        if (ok) return@execute com.example.taptix.engine.DirectClickResult.SUCCESS
+                        // Action was dispatched to a clickable node but returned false.
+                        // In Android, performAction returning false does not prove non-dispatch.
+                        // Classify as UNKNOWN to prevent speculative coordinate double-tap.
+                        return@execute com.example.taptix.engine.DirectClickResult.UNKNOWN
                     }
                 }
                 var clickableNode: AccessibilityNodeInfo? = targetNode.parent
                 while (clickableNode != null) {
                     if (clickableNode.isClickable) {
-                        ok = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        if (ok) break
+                        val ok = clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        if (ok) return@execute com.example.taptix.engine.DirectClickResult.SUCCESS
+                        return@execute com.example.taptix.engine.DirectClickResult.UNKNOWN
                     }
                     clickableNode = clickableNode.parent
                 }
-                ok
+                // No node in candidate hierarchy is clickable via accessibility action.
+                // Verify whether non-dispatch is reliably established:
+                // Target must be visible, enabled, in partner app foreground, with bounds on screen.
+                val isTargetValid = targetNode.isVisibleToUser && targetNode.isEnabled
+                val isForegroundValid = (rootNode.packageName?.toString() ?: "").equals(appPkg, ignoreCase = true)
+                if (isTargetValid && isForegroundValid) {
+                    com.example.taptix.engine.DirectClickResult.FAILED_CONFIRMED_NOT_DISPATCHED
+                } else {
+                    com.example.taptix.engine.DirectClickResult.UNKNOWN
+                }
             },
             gestureTap = { performTap(centerX, centerY, durationMs = 50L) },
             swipe = {

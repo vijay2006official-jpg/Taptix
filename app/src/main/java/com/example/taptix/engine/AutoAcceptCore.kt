@@ -90,17 +90,25 @@ class DuplicateOfferGuard(private val windowMs: Long = DEFAULT_WINDOW_MS) {
     }
 }
 
-enum class ClickMethod { SWIPE, DIRECT_CLICK, GESTURE_FALLBACK }
+enum class ClickMethod { SWIPE, DIRECT_CLICK, GESTURE_FALLBACK, UNKNOWN_DISPATCH }
+
+enum class DirectClickResult {
+    SUCCESS,
+    FAILED_CONFIRMED_NOT_DISPATCHED,
+    UNKNOWN
+}
 
 /**
  * Executes exactly ONE accept action:
- * swipe for slide-to-accept controls, otherwise a direct ACTION_CLICK,
- * and a coordinate gesture tap only if the direct click was not possible.
+ * - swipe for slide-to-accept controls
+ * - direct ACTION_CLICK when directClick succeeds
+ * - controlled coordinate gesture fallback ONLY when direct action is confirmed not dispatched
+ * - NO fallback and NO secondary tap when direct action outcome is uncertain (UNKNOWN)
  */
 object AcceptClickExecutor {
     fun execute(
         isSwipe: Boolean,
-        directClick: () -> Boolean,
+        directClick: () -> DirectClickResult,
         gestureTap: () -> Unit,
         swipe: () -> Unit
     ): ClickMethod {
@@ -108,9 +116,14 @@ object AcceptClickExecutor {
             swipe()
             return ClickMethod.SWIPE
         }
-        if (directClick()) return ClickMethod.DIRECT_CLICK
-        gestureTap()
-        return ClickMethod.GESTURE_FALLBACK
+        return when (directClick()) {
+            DirectClickResult.SUCCESS -> ClickMethod.DIRECT_CLICK
+            DirectClickResult.FAILED_CONFIRMED_NOT_DISPATCHED -> {
+                gestureTap()
+                ClickMethod.GESTURE_FALLBACK
+            }
+            DirectClickResult.UNKNOWN -> ClickMethod.UNKNOWN_DISPATCH
+        }
     }
 }
 
