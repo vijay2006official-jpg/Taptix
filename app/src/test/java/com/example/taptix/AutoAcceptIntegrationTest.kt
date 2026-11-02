@@ -51,7 +51,7 @@ class AutoAcceptIntegrationTest {
     @Test
     fun configXml_packageNamesMatchCodeList() {
         val xmlPkgs = loadConfigXml().getAttribute("android:packageNames").split(",").map { it.trim() }.toSet()
-        val expected = (PartnerPackages.SUPPORTED + "com.example.taptix").toSet()
+        val expected = PartnerPackages.SUPPORTED.toSet()
         assertEquals("XML packageNames and PartnerPackages.SUPPORTED are out of sync", expected, xmlPkgs)
     }
 
