@@ -21,3 +21,5 @@ upload_*.py
 .kotlin/
 
 release_artifacts/
+
+testapp/build/
