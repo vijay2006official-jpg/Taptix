@@ -9,4 +9,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"
-    android:packageNames="com.ubercab.driver,com.olacabs.oladriver,com.olacabs.driver,com.olacabs.partner,com.rapido.rider,com.rapido.captain,com.rapido.passenger,sinet.startup.inDriver,com.indriver,in.juspay.nammayatripartner,movingtech.nammatrip.driver,movingtech.nammayatri.driver,in.juspay.nammayatri,in.juspay.yatrisathi,com.theporter.android.driverapp,in.porter.partner,com.theporter.partner,me.lyft.driver,com.grabtaxi.driver2,com.dd.driver,com.mock.uber.simulator,com.example.taptix" />
+    android:packageNames="com.ubercab.driver,com.olacabs.oladriver,com.olacabs.driver,com.olacabs.partner,com.rapido.rider,com.rapido.captain,com.rapido.passenger,sinet.startup.inDriver,com.indriver,in.juspay.nammayatripartner,movingtech.nammatrip.driver,movingtech.nammayatri.driver,in.juspay.nammayatri,in.juspay.yatrisathi,com.theporter.android.driverapp,in.porter.partner,com.theporter.partner,me.lyft.driver,com.grabtaxi.driver2,com.dd.driver,com.example.taptix" />

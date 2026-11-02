@@ -38,8 +38,7 @@ object PartnerPackages {
         "com.theporter.partner",
         "me.lyft.driver",
         "com.grabtaxi.driver2",
-        "com.dd.driver",
-        "com.mock.uber.simulator"
+        "com.dd.driver"
     )
 
     /**
