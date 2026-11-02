@@ -5456,7 +5456,15 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        event?.source?.let { src -> if (!rootsToScan.contains(src)) rootsToScan.add(src) }
+        if (rootsToScan.isEmpty()) {
+            event?.source?.let { src ->
+                var top = src
+                while (top.parent != null) {
+                    top = top.parent ?: break
+                }
+                rootsToScan.add(top)
+            }
+        }
 
 
 
@@ -5816,9 +5824,41 @@ class AutoClickService : AccessibilityService() {
         destination: String = "",
         stateMachine: com.example.taptix.engine.BookingStateMachine? = null
     ) {
+        val roots = mutableListOf<AccessibilityNodeInfo>()
+        try {
+            windows.forEach { w -> w.root?.let { roots.add(it) } }
+        } catch (_: Exception) { }
+        if (roots.isEmpty()) rootInActiveWindow?.let { roots.add(it) }
 
-        val stillVisible = try { isAcceptButtonStillVisible(appPkg, keywords) } catch (e: Exception) { null }
-        val outcome = com.example.taptix.engine.AcceptVerifier.evaluate(stillVisible)
+        val appRoots = roots.filter { (it.packageName?.toString() ?: "").equals(appPkg, ignoreCase = true) }
+        val verifyKeywords = if (matchText.isNotBlank()) listOf(matchText) else listOf("ACCEPT", "CONFIRM", "TAP TO ACCEPT", "SWIPE TO ACCEPT")
+        val stillVisibleNode = if (appRoots.isNotEmpty()) {
+            appRoots.mapNotNull { findNodeWithKeywords(it, verifyKeywords) }.firstOrNull()
+        } else null
+
+        val isButtonStillVisible = stillVisibleNode != null
+        val isButtonEnabled = stillVisibleNode?.isEnabled ?: false
+
+        // Check for positive confirmation signals across the app screen tree
+        val hasPositiveConfirmation = appRoots.any { root ->
+            findAnyKeywordInTree(root, com.example.taptix.engine.AcceptVerifier.POSITIVE_CONFIRMATION_KEYWORDS) != null
+        }
+
+        // Check for cancellation or expiry signals across the app screen tree
+        val hasNegativeSignal = appRoots.any { root ->
+            findAnyKeywordInTree(root, com.example.taptix.engine.AcceptVerifier.EXPIRY_OR_CANCELLATION_KEYWORDS) != null
+        }
+
+        val outcome = if (roots.isEmpty()) {
+            com.example.taptix.engine.AcceptOutcome.UNKNOWN
+        } else {
+            com.example.taptix.engine.AcceptVerifier.evaluate(
+                acceptButtonStillVisible = isButtonStillVisible,
+                positiveConfirmationPresent = hasPositiveConfirmation,
+                negativeOrCancelledPresent = hasNegativeSignal
+            )
+        }
+
         val logs = com.example.taptix.data.ActivityLogManager.getInstance(applicationContext)
 
         when (outcome) {
@@ -5826,13 +5866,13 @@ class AutoClickService : AccessibilityService() {
                 stateMachine?.onVerificationResult(outcome)
                 stateMachine?.onBookingCompleted()
 
-                Log.i(TAG, "[TaptixAutoAccept] Verified: booking popup closed after $clickMethod")
+                Log.i(TAG, "[TaptixAutoAccept] Verified: positive acceptance confirmed after $clickMethod")
 
                 logs.addLog(
                     appName = getReadableAppName(appPkg),
                     actionText = "Accepted: $matchText",
                     status = com.example.taptix.model.LogStatus.ACCEPTED,
-                    details = "Booking popup closed after tap ($clickMethod)" + if (fare > 0.0) " [₹$fare]" else "",
+                    details = "Positive acceptance confirmed ($clickMethod)" + if (fare > 0.0) " [\u20b9$fare]" else "",
                     fare = if (fare > 0.0) fare else null,
                     distanceKm = if (distanceKm > 0.0) distanceKm else null,
                     destination = destination
@@ -5859,31 +5899,46 @@ class AutoClickService : AccessibilityService() {
             }
 
             com.example.taptix.engine.AcceptOutcome.NOT_CONFIRMED -> {
-                if (com.example.taptix.engine.ControlledRetryPolicy.shouldRetry(retryAttempt, outcome)) {
-                    Log.i(TAG, "[TaptixAutoAccept] Accept button still visible after tap, attempting controlled retry #1")
-                    val currentForegroundPkg = rootInActiveWindow?.packageName?.toString() ?: ""
-                    val isStillPartner = currentForegroundPkg.isBlank() || currentForegroundPkg.contains(appPkg, ignoreCase = true)
-                    if (isStillPartner && centerX > 0f && centerY > 0f) {
-                        stateMachine?.onClickAttempted(com.example.taptix.engine.ClickMethod.GESTURE_FALLBACK)
-                        performTap(centerX, centerY, durationMs = 60L)
-                        mainHandler.postDelayed({
-                            verifyAcceptOutcome(
-                                appPkg, keywords, matchText, clickMethod, settings,
-                                centerX, centerY, retryAttempt = retryAttempt + 1,
-                                fare, distanceKm, destination, stateMachine
-                            )
-                        }, com.example.taptix.engine.AcceptVerifier.RETRY_VERIFY_DELAY_MS)
-                        return
-                    }
+                val canRetrySafely = com.example.taptix.engine.ControlledRetryPolicy.isRetrySafe(
+                    currentAttempts = retryAttempt,
+                    outcome = outcome,
+                    isButtonStillVisible = isButtonStillVisible,
+                    isButtonEnabled = isButtonEnabled,
+                    isForegroundTargetApp = appRoots.isNotEmpty(),
+                    hasNegativeSignal = hasNegativeSignal,
+                    hasPositiveConfirmation = hasPositiveConfirmation
+                )
+
+                if (canRetrySafely && centerX > 0f && centerY > 0f) {
+                    Log.i(TAG, "[TaptixAutoAccept] Button still visible and enabled; executing safe retry #1")
+                    stateMachine?.onClickAttempted(com.example.taptix.engine.ClickMethod.GESTURE_FALLBACK)
+                    performTap(centerX, centerY, durationMs = 60L)
+                    mainHandler.postDelayed({
+                        verifyAcceptOutcome(
+                            appPkg, keywords, matchText, clickMethod, settings,
+                            centerX, centerY, retryAttempt = retryAttempt + 1,
+                            fare, distanceKm, destination, stateMachine
+                        )
+                    }, com.example.taptix.engine.AcceptVerifier.RETRY_VERIFY_DELAY_MS)
+                    return
                 }
 
                 stateMachine?.onVerificationResult(outcome)
-                Log.w(TAG, "[TaptixAutoAccept] Accept NOT confirmed: booking popup remained visible after tap/retry")
+
+                val unconfirmedReason = when {
+                    hasNegativeSignal -> "Offer expired or cancelled by passenger/platform"
+                    isButtonStillVisible && !isButtonEnabled -> "First click processing; button disabled (avoided duplicate action)"
+                    isButtonStillVisible -> "Button remained visible after tap/retry — not confirmed"
+                    !hasPositiveConfirmation -> "Booking popup closed without positive acceptance confirmation"
+                    else -> "Acceptance could not be verified"
+                }
+
+                Log.w(TAG, "[TaptixAutoAccept] Accept NOT confirmed: $unconfirmedReason")
                 logs.addLog(
                     appName = getReadableAppName(appPkg),
                     actionText = "Attempted: $matchText",
                     status = com.example.taptix.model.LogStatus.ATTEMPTED,
-                    details = "Button remained visible after tap ($clickMethod) — not accepted" + if (fare > 0.0) " [₹$fare]" else "",
+                    details = "$unconfirmedReason ($clickMethod)" + if (fare > 0.0) " [\u20b9$fare]" else "",
                     fare = if (fare > 0.0) fare else null,
                     distanceKm = if (distanceKm > 0.0) distanceKm else null,
                     destination = destination
@@ -6056,7 +6111,11 @@ class AutoClickService : AccessibilityService() {
 
         // Structured Offer Parsing and Rule Evaluation
 
-        val offer = com.example.taptix.engine.OfferParser.parse(rootNode, appPkg)
+        var fullTreeRoot = rootNode
+        while (fullTreeRoot.parent != null) {
+            fullTreeRoot = fullTreeRoot.parent ?: break
+        }
+        val offer = com.example.taptix.engine.OfferParser.parse(fullTreeRoot, appPkg)
 
 
 
@@ -6250,7 +6309,7 @@ class AutoClickService : AccessibilityService() {
 
         val nodeText = (matchedNode.text?.toString() ?: matchedNode.contentDescription?.toString() ?: "").uppercase()
 
-        val isSwipe = nodeText.contains("SWIPE") || (finalRect.width() > 500 && finalRect.height() < 250)
+        val isSwipe = nodeText.contains("SWIPE") || nodeText.contains("SLIDE") || (matchedNode.className?.toString() ?: "").contains("SeekBar", ignoreCase = true)
 
         // Eliminate dual-dispatch conflict: prioritize immediate direct node click (ACTION_CLICK),
         // and fall back to gesture dispatch only if the node is not directly clickable.

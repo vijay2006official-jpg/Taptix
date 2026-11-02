@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Taptix"
 include(":app")
+include(":testapp")
  

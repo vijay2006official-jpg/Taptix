@@ -38,7 +38,8 @@ object PartnerPackages {
         "com.theporter.partner",
         "me.lyft.driver",
         "com.grabtaxi.driver2",
-        "com.dd.driver"
+        "com.dd.driver",
+        "com.mock.uber.simulator"
     )
 
     /**
@@ -126,10 +127,37 @@ object AcceptVerifier {
     /** Secondary retry timeout for slow-rendering screens. */
     const val RETRY_VERIFY_DELAY_MS = 450L
 
+    val POSITIVE_CONFIRMATION_KEYWORDS = listOf(
+        "ACCEPTED", "RIDE ACCEPTED", "BOOKING ACCEPTED", "TRIP ACCEPTED",
+        "NAVIGATE", "NAVIGATION", "START TRIP", "ARRIVING", "HEAD TO",
+        "PICK UP", "PICKUP", "ON THE WAY", "CALL PASSENGER", "CALL CUSTOMER",
+        "CHAT", "PASSENGER", "CUSTOMER", "WAYPOINT", "ORDER DETAILS", "ACCEPTED BY YOU"
+    )
+
+    val EXPIRY_OR_CANCELLATION_KEYWORDS = listOf(
+        "EXPIRED", "OFFER EXPIRED", "CANCELLED", "CANCELED", "MISSED",
+        "TOO LATE", "ANOTHER DRIVER", "NO LONGER AVAILABLE", "ORDER TIMED OUT",
+        "FAILED", "TRIP CANCELLED", "LOST"
+    )
+
     /**
-     * @param acceptButtonStillVisible null = screen could not be read,
-     * true = accept button still on screen, false = booking popup is gone.
+     * Comprehensive acceptance evaluation ensuring button disappearance alone
+     * does NOT automatically establish acceptance.
      */
+    fun evaluate(
+        acceptButtonStillVisible: Boolean?,
+        positiveConfirmationPresent: Boolean = false,
+        negativeOrCancelledPresent: Boolean = false
+    ): AcceptOutcome {
+        if (acceptButtonStillVisible == null) return AcceptOutcome.UNKNOWN
+        if (acceptButtonStillVisible) return AcceptOutcome.NOT_CONFIRMED
+        if (negativeOrCancelledPresent) return AcceptOutcome.NOT_CONFIRMED
+        if (positiveConfirmationPresent) return AcceptOutcome.CONFIRMED
+        // Button disappearance alone without positive confirmation cannot establish successful acceptance
+        return AcceptOutcome.NOT_CONFIRMED
+    }
+
+    /** Overload for direct visibility checks (fallback / basic validation) */
     fun evaluate(acceptButtonStillVisible: Boolean?): AcceptOutcome = when (acceptButtonStillVisible) {
         null -> AcceptOutcome.UNKNOWN
         true -> AcceptOutcome.NOT_CONFIRMED
@@ -146,6 +174,32 @@ object ControlledRetryPolicy {
 
     fun shouldRetry(currentAttempts: Int, outcome: AcceptOutcome): Boolean {
         return currentAttempts < MAX_RETRIES && outcome == AcceptOutcome.NOT_CONFIRMED
+    }
+
+    /**
+     * Safety gate for executing a retry tap:
+     * - Must have retries remaining (< MAX_RETRIES)
+     * - Button must be visible AND still enabled (not disabled or in loading state)
+     * - App in foreground must still match the target partner app
+     * - No negative/cancellation messages on screen
+     * - No positive confirmation messages on screen
+     */
+    fun isRetrySafe(
+        currentAttempts: Int,
+        outcome: AcceptOutcome,
+        isButtonStillVisible: Boolean,
+        isButtonEnabled: Boolean,
+        isForegroundTargetApp: Boolean,
+        hasNegativeSignal: Boolean,
+        hasPositiveConfirmation: Boolean
+    ): Boolean {
+        if (!shouldRetry(currentAttempts, outcome)) return false
+        if (!isButtonStillVisible) return false
+        if (!isButtonEnabled) return false // Button disabled = already processing first click!
+        if (!isForegroundTargetApp) return false // Switched app = do not misclick!
+        if (hasNegativeSignal) return false // Cancelled or expired = do not tap!
+        if (hasPositiveConfirmation) return false // Already confirmed!
+        return true
     }
 }
 
