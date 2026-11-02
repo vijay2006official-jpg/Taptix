@@ -526,7 +526,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
 
-    var isMicOn            by remember { mutableStateOf(false) }
+
 
 
 
@@ -623,7 +623,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
 
-        isMicOn = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
 
 
 
