@@ -316,6 +316,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         prefsRepo = PreferencesRepository(this)
+        com.example.taptix.automation.safety.AutomationSafetyController.initialize(applicationContext)
 
         enableEdgeToEdge()
 
@@ -1281,7 +1282,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
             MasterControlCard(
 
-                isOn = appSettings.masterControlEnabled && hasRequiredPermissions,
+                isOn = appSettings.masterControlEnabled && hasRequiredPermissions && isAccessibilityOn && (if (isServiceRunning) (com.example.taptix.automation.safety.AutomationSafetyController.state == com.example.taptix.automation.safety.AutomationSafetyState.ON) else !com.example.taptix.automation.safety.AutomationSafetyController.isStopLatched),
 
                 isServiceRunning = isServiceRunning,
 

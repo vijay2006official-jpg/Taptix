@@ -167,6 +167,12 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_EMERGENCY_STOP) {
+            com.example.taptix.automation.safety.AutomationSafetyController.emergencyStop("NOTIFICATION_STOP")
+            stopClickingSequence()
+            return START_NOT_STICKY
+        }
+
         if (intent?.action == ACTION_STOP_SERVICE ||
             !prefsRepo.isFloatingDockEnabled() ||
             !Settings.canDrawOverlays(this)
@@ -286,11 +292,22 @@ class OverlayService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val stopIntent = Intent(this, OverlayService::class.java).apply {
+            action = ACTION_EMERGENCY_STOP
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText("Real-Time Floating Trip Overlay Active")
+            .setContentText("Taptix Automation Controller Active")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
+            .addAction(android.R.drawable.ic_delete, "EMERGENCY STOP", stopPendingIntent)
             .setOngoing(true)
             .build()
 
@@ -700,6 +717,7 @@ class OverlayService : Service() {
         statusTv?.text = "STATUS: PAUSED"
         statusTv?.setTextColor(Color.YELLOW)
 
+        com.example.taptix.automation.safety.AutomationSafetyController.emergencyStop("OVERLAY_STOP")
         AutoClickService.instance?.stopClicking()
     }
 
@@ -903,6 +921,7 @@ class OverlayService : Service() {
         const val ACTION_STOP_SERVICE = "com.example.taptix.ACTION_STOP_SERVICE"
         const val ACTION_UPDATE_TRIP = "com.example.taptix.ACTION_UPDATE_TRIP"
         const val ACTION_SYNC_MASTER = "com.example.taptix.ACTION_SYNC_MASTER"
+        const val ACTION_EMERGENCY_STOP = "com.example.taptix.ACTION_EMERGENCY_STOP"
 
         @Volatile
         var instance: OverlayService? = null

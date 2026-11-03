@@ -859,6 +859,16 @@ class AutoClickService : AccessibilityService() {
 
 
         Log.d(TAG, "AutoClickService created")
+        com.example.taptix.automation.safety.AutomationSafetyController.initialize(applicationContext)
+        com.example.taptix.automation.safety.AutomationSafetyController.registerStopListener {
+            mainHandler.post {
+                currentBookingStateMachine?.resetOnInterruption("EMERGENCY_STOP")
+                currentBookingStateMachine = null
+                clickRunnable?.let { mainHandler.removeCallbacks(it) }
+                clickRunnable = null
+                mainHandler.removeCallbacksAndMessages(null)
+            }
+        }
 
 
 
@@ -938,7 +948,9 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        isClickingActive.set(true)
+        val masterEnabled = prefsRepo.getSettings().masterControlEnabled
+        com.example.taptix.automation.safety.AutomationSafetyController.notifyServiceConnected(masterEnabled)
+        isClickingActive.set(com.example.taptix.automation.safety.AutomationSafetyController.canProcessScreen())
 
 
 
@@ -1035,6 +1047,7 @@ class AutoClickService : AccessibilityService() {
         currentBookingStateMachine?.resetOnInterruption("SERVICE_DESTROYED")
         currentBookingStateMachine = null
         isServiceRunning.set(false)
+        com.example.taptix.automation.safety.AutomationSafetyController.notifyServiceDisconnected()
         isClickingActive.set(false)
         engineState = com.example.taptix.engine.AutomationEngineState.DISCONNECTED
         onEngineStateChanged?.invoke(engineState)
@@ -1151,6 +1164,7 @@ class AutoClickService : AccessibilityService() {
 
 
         isServiceRunning.set(false)
+        com.example.taptix.automation.safety.AutomationSafetyController.notifyServiceDisconnected()
         isClickingActive.set(false)
         engineState = com.example.taptix.engine.AutomationEngineState.DISCONNECTED
         onEngineStateChanged?.invoke(engineState)
@@ -1324,7 +1338,7 @@ class AutoClickService : AccessibilityService() {
 
         val settings = prefsRepo.getSettings()
         // Early exit if automation is inactive
-        if (!settings.masterControlEnabled || !isClickingActive.get()) return
+        if (!settings.masterControlEnabled || !com.example.taptix.automation.safety.AutomationSafetyController.canProcessScreen()) return
         // Prevent accidental gesture taps when device is locked (pocket protection)
         val km = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
         if (km?.isKeyguardLocked == true) return
@@ -1608,7 +1622,24 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        isClickingActive.set(active)
+        if (active) {
+            val masterEnabled = prefsRepo.getSettings().masterControlEnabled
+            val ok = com.example.taptix.automation.safety.AutomationSafetyController.requestEnable(
+                hasAccessibilityService = true,
+                masterEnabled = masterEnabled,
+                isUserExplicitAction = true
+            )
+            isClickingActive.set(ok && com.example.taptix.automation.safety.AutomationSafetyController.canProcessScreen())
+            engineState = if (ok) com.example.taptix.engine.AutomationEngineState.CONNECTED_IDLE else com.example.taptix.engine.AutomationEngineState.PAUSED_BY_USER
+        } else {
+            com.example.taptix.automation.safety.AutomationSafetyController.requestDisable("USER_TOGGLE")
+            isClickingActive.set(false)
+            mainHandler.removeCallbacksAndMessages(null)
+            stopClicking()
+            engineState = com.example.taptix.engine.AutomationEngineState.PAUSED_BY_USER
+        }
+        onEngineStateChanged?.invoke(engineState)
+        return
 
 
 
@@ -3291,7 +3322,10 @@ class AutoClickService : AccessibilityService() {
 
 
 
+        com.example.taptix.automation.safety.AutomationSafetyController.emergencyStop("STOP_CLICKING")
         isClickingActive.set(false)
+        prefsRepo.saveMasterControl(false)
+        mainHandler.removeCallbacksAndMessages(null)
 
 
 
@@ -3963,7 +3997,18 @@ class AutoClickService : AccessibilityService() {
 
 
 
-    fun performTap(x: Float, y: Float, durationMs: Long = 100L, onResult: ((Boolean) -> Unit)? = null) {
+    fun performTap(
+        x: Float,
+        y: Float,
+        durationMs: Long = 100L,
+        onResult: ((Boolean) -> Unit)? = null,
+        actionGen: Long = com.example.taptix.automation.safety.AutomationSafetyController.currentGeneration
+    ) {
+        if (!com.example.taptix.automation.safety.AutomationSafetyController.canExecuteAction(actionGen)) {
+            Log.w(TAG, "[SafetyController] performTap aborted: state=${com.example.taptix.automation.safety.AutomationSafetyController.state}, gen=$actionGen vs curr=${com.example.taptix.automation.safety.AutomationSafetyController.currentGeneration}")
+            onResult?.invoke(false)
+            return
+        }
 
 
 
@@ -4544,7 +4589,18 @@ class AutoClickService : AccessibilityService() {
 
 
 
-    fun performSwipe(startX: Float, startY: Float, endX: Float, endY: Float, durationMs: Long = 300L) {
+    fun performSwipe(
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        durationMs: Long = 300L,
+        actionGen: Long = com.example.taptix.automation.safety.AutomationSafetyController.currentGeneration
+    ) {
+        if (!com.example.taptix.automation.safety.AutomationSafetyController.canExecuteAction(actionGen)) {
+            Log.w(TAG, "[SafetyController] performSwipe aborted: state=${com.example.taptix.automation.safety.AutomationSafetyController.state}, gen=$actionGen vs curr=${com.example.taptix.automation.safety.AutomationSafetyController.currentGeneration}")
+            return
+        }
 
 
 
@@ -5918,10 +5974,11 @@ class AutoClickService : AccessibilityService() {
                     hasPositiveConfirmation = hasPositiveConfirmation
                 )
 
-                if (canRetrySafely && centerX > 0f && centerY > 0f) {
+                val currentGen = com.example.taptix.automation.safety.AutomationSafetyController.currentGeneration
+                if (canRetrySafely && centerX > 0f && centerY > 0f && com.example.taptix.automation.safety.AutomationSafetyController.canExecuteAction(currentGen)) {
                     Log.i(TAG, "[TaptixAutoAccept] Button still visible and enabled; executing safe retry #1")
                     stateMachine?.onClickAttempted(com.example.taptix.engine.ClickMethod.GESTURE_FALLBACK)
-                    performTap(centerX, centerY, durationMs = 60L)
+                    performTap(centerX, centerY, durationMs = 60L, actionGen = currentGen)
                     mainHandler.postDelayed({
                         verifyAcceptOutcome(
                             appPkg, keywords, matchText, clickMethod, settings,
@@ -5978,6 +6035,11 @@ class AutoClickService : AccessibilityService() {
         val rootPkg = (rootNode.packageName?.toString() ?: "").trim().lowercase()
         val ownPkg = packageName.lowercase()
         if (rootPkg.contains("taptix") || rootPkg == ownPkg || rootPkg.contains("systemui") || rootPkg.contains("settings")) {
+            return false
+        }
+
+        val actionGen = com.example.taptix.automation.safety.AutomationSafetyController.currentGeneration
+        if (!com.example.taptix.automation.safety.AutomationSafetyController.canExecuteAction(actionGen)) {
             return false
         }
 
@@ -6162,9 +6224,17 @@ class AutoClickService : AccessibilityService() {
 
         // Eliminate dual-dispatch conflict: prioritize immediate direct node click (ACTION_CLICK),
         // and fall back to gesture dispatch ONLY when direct action non-dispatch is reliably confirmed.
+        if (!com.example.taptix.automation.safety.AutomationSafetyController.canExecuteAction(actionGen)) {
+            Log.w(TAG, "[SafetyController] Click execution aborted before dispatch: state=${com.example.taptix.automation.safety.AutomationSafetyController.state}")
+            return false
+        }
+
         val clickMethod = com.example.taptix.engine.AcceptClickExecutor.execute(
             isSwipe = isSwipe,
             directClick = {
+                if (!com.example.taptix.automation.safety.AutomationSafetyController.canExecuteAction(actionGen)) {
+                    return@execute com.example.taptix.engine.DirectClickResult.FAILED_CONFIRMED_NOT_DISPATCHED
+                }
                 val candidates = listOf(targetNode)
                 for (node in candidates) {
                     if (node.isClickable) {
@@ -6196,11 +6266,11 @@ class AutoClickService : AccessibilityService() {
                     com.example.taptix.engine.DirectClickResult.UNKNOWN
                 }
             },
-            gestureTap = { performTap(centerX, centerY, durationMs = 50L) },
+            gestureTap = { performTap(centerX, centerY, durationMs = 50L, actionGen = actionGen) },
             swipe = {
                 val startX = (finalRect.left + 60).toFloat()
                 val endX = (finalRect.right - 60).toFloat().coerceAtLeast(startX + 180f)
-                performSwipe(startX, centerY, endX, centerY, durationMs = 280L)
+                performSwipe(startX, centerY, endX, centerY, durationMs = 280L, actionGen = actionGen)
             }
         )
 
