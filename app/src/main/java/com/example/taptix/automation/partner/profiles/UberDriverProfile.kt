@@ -20,7 +20,7 @@ class UberDriverProfile : BasePartnerProfile() {
 
     override val positiveConfirmationKeywords: List<String> = listOf(
         "ACCEPTED", "NAVIGATE", "NAVIGATION", "START TRIP", "ARRIVING",
-        "HEAD TO", "PICK UP", "PICKUP", "ON THE WAY", "ORDER DETAILS"
+        "HEAD TO", "PICK UP", "PICKUP", "ON THE WAY"
     )
 
     override val cancellationKeywords: List<String> = listOf(

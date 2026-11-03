@@ -3,6 +3,7 @@ package com.example.taptix
 import com.example.taptix.automation.partner.*
 import com.example.taptix.automation.partner.profiles.*
 import com.example.taptix.engine.PartnerPackages
+import com.example.taptix.engine.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -129,5 +130,87 @@ class PartnerProfileArchitectureTest {
 
         val partnerIds = allProfiles.map { it.partnerId }
         assertEquals("Every profile must have a unique partnerId", partnerIds.distinct().size, partnerIds.size)
+    }
+
+    @Test
+    fun testAcceptanceConfirmation_ButtonDisappearanceAloneCannotConfirm() {
+        // Disappearance alone without positive confirmation MUST yield NOT_CONFIRMED
+        val outcome = AcceptVerifier.evaluate(
+            acceptButtonStillVisible = false,
+            positiveConfirmationPresent = false,
+            negativeOrCancelledPresent = false
+        )
+        assertEquals(AcceptOutcome.NOT_CONFIRMED, outcome)
+    }
+
+    @Test
+    fun testAcceptanceConfirmation_NegativeSignalPreventsPositiveConfirmation() {
+        // Even if a positive keyword was matched, negative/cancellation signal MUST take strict priority
+        val outcome = AcceptVerifier.evaluate(
+            acceptButtonStillVisible = false,
+            positiveConfirmationPresent = true,
+            negativeOrCancelledPresent = true
+        )
+        assertEquals(AcceptOutcome.NOT_CONFIRMED, outcome)
+    }
+
+    @Test
+    fun testAcceptanceConfirmation_AmbiguousKeywordsExcludedFromGlobalDefaults() {
+        val positive = AcceptVerifier.POSITIVE_CONFIRMATION_KEYWORDS
+        assertFalse("Ambiguous keyword 'CHAT' must not be in positive confirmation list", positive.contains("CHAT"))
+        assertFalse("Ambiguous keyword 'PASSENGER' must not be in positive confirmation list", positive.contains("PASSENGER"))
+        assertFalse("Ambiguous keyword 'CUSTOMER' must not be in positive confirmation list", positive.contains("CUSTOMER"))
+        assertFalse("Ambiguous keyword 'ORDER DETAILS' must not be in positive confirmation list", positive.contains("ORDER DETAILS"))
+    }
+
+    @Test
+    fun testAcceptanceConfirmation_NullVisibilityYieldsUnknown() {
+        val outcome = AcceptVerifier.evaluate(
+            acceptButtonStillVisible = null,
+            positiveConfirmationPresent = true,
+            negativeOrCancelledPresent = false
+        )
+        assertEquals(AcceptOutcome.UNKNOWN, outcome)
+    }
+
+    @Test
+    fun testClickSafety_UnknownClickResultTriggersZeroRetries() {
+        // ControlledRetryPolicy must reject retries when outcome is UNKNOWN
+        val canRetry = ControlledRetryPolicy.isRetrySafe(
+            currentAttempts = 0,
+            outcome = AcceptOutcome.UNKNOWN,
+            isButtonStillVisible = true,
+            isButtonEnabled = true,
+            isForegroundTargetApp = true,
+            hasNegativeSignal = false,
+            hasPositiveConfirmation = false
+        )
+        assertFalse("UNKNOWN outcome must never trigger speculative retries", canRetry)
+    }
+
+    @Test
+    fun testClickSafety_BackgroundAppDisablesRetries() {
+        val canRetry = ControlledRetryPolicy.isRetrySafe(
+            currentAttempts = 0,
+            outcome = AcceptOutcome.NOT_CONFIRMED,
+            isButtonStillVisible = true,
+            isButtonEnabled = true,
+            isForegroundTargetApp = false, // App is in background
+            hasNegativeSignal = false,
+            hasPositiveConfirmation = false
+        )
+        assertFalse("Background application must never trigger retries", canRetry)
+    }
+
+    @Test
+    fun testProfileRegistry_DoesNotImplyRealDeviceTested() {
+        // Explicitly confirm that registration does not imply the real partner app or current layout has been tested
+        val allProfiles = PartnerProfileRegistry.getAllProfiles()
+        allProfiles.forEach { profile ->
+            assertNotNull(profile.partnerId)
+            assertTrue(profile.supportedPackages.isNotEmpty())
+            // Status tracks maintenance readiness, not physical hardware verification
+            assertNotNull(profile.status)
+        }
     }
 }

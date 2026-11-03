@@ -5857,7 +5857,7 @@ class AutoClickService : AccessibilityService() {
             findAnyKeywordInTree(root, negativeKeywords) != null
         }
 
-        val outcome = if (roots.isEmpty()) {
+        val outcome = if (roots.isEmpty() || appRoots.isEmpty()) {
             com.example.taptix.engine.AcceptOutcome.UNKNOWN
         } else {
             com.example.taptix.engine.AcceptVerifier.evaluate(
