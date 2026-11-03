@@ -47,8 +47,12 @@ class ComprehensiveRegressionTest {
             notConfirmedOutcome == AcceptOutcome.CONFIRMED
         )
 
-        // Only when button DISAPPEARS after tap -> CONFIRMED
-        val confirmedOutcome = AcceptVerifier.evaluate(acceptButtonStillVisible = false)
+        // Button disappearance alone without positive confirmation must NOT count as accepted
+        val disappearAloneOutcome = AcceptVerifier.evaluate(acceptButtonStillVisible = false)
+        assertEquals(AcceptOutcome.NOT_CONFIRMED, disappearAloneOutcome)
+
+        // Only when button disappears AND positive confirmation is present -> CONFIRMED
+        val confirmedOutcome = AcceptVerifier.evaluate(acceptButtonStillVisible = false, positiveConfirmationPresent = true)
         assertEquals(AcceptOutcome.CONFIRMED, confirmedOutcome)
 
         // State 4: Booking completed

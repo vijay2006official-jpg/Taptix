@@ -212,9 +212,13 @@ class AutoAcceptIntegrationTest {
 
     @Test
     fun verify_outcomeMapping() {
-        assertEquals(AcceptOutcome.CONFIRMED, AcceptVerifier.evaluate(false))
+        // Button disappearance alone without positive confirmation must NOT count as accepted
+        assertEquals(AcceptOutcome.NOT_CONFIRMED, AcceptVerifier.evaluate(false))
         assertEquals(AcceptOutcome.NOT_CONFIRMED, AcceptVerifier.evaluate(true))
         assertEquals(AcceptOutcome.UNKNOWN, AcceptVerifier.evaluate(null))
+        // Positive confirmation is required for CONFIRMED
+        assertEquals(AcceptOutcome.CONFIRMED, AcceptVerifier.evaluate(acceptButtonStillVisible = false, positiveConfirmationPresent = true))
+        assertEquals(AcceptOutcome.NOT_CONFIRMED, AcceptVerifier.evaluate(acceptButtonStillVisible = false, positiveConfirmationPresent = false))
         assertTrue("Verification must be short so it doesn't miss the next booking", AcceptVerifier.VERIFY_DELAY_MS in 300L..1500L)
     }
 

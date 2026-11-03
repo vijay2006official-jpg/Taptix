@@ -213,7 +213,7 @@ object OfferRuleEngine {
             val tripDist = offer.tripDistanceKm
             val fare = offer.fare
 
-            if (tripDist == null || tripDist <= 0.0) {
+            if (tripDist == null || tripDist <= 0.0 || tripDist.isNaN() || tripDist.isInfinite()) {
                 if (rules.fallbackOnUnparsedData == UnparsedDataFallback.REJECT) {
                     return RuleEvaluationResult(
                         isAccepted = false,
@@ -224,7 +224,7 @@ object OfferRuleEngine {
                 } else {
                     matchedRules.add("Fare/km Skipped (Trip distance unavailable)")
                 }
-            } else if (fare == null || fare <= 0.0) {
+            } else if (fare == null || fare <= 0.0 || fare.isNaN() || fare.isInfinite()) {
                 if (rules.fallbackOnUnparsedData == UnparsedDataFallback.REJECT) {
                     return RuleEvaluationResult(
                         isAccepted = false,

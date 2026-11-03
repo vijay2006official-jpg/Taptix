@@ -169,11 +169,14 @@ object AcceptVerifier {
         return AcceptOutcome.NOT_CONFIRMED
     }
 
-    /** Overload for direct visibility checks (fallback / basic validation) */
+    /**
+     * Overload for direct visibility checks.
+     * Button disappearance alone without positive confirmation does NOT establish acceptance.
+     */
     fun evaluate(acceptButtonStillVisible: Boolean?): AcceptOutcome = when (acceptButtonStillVisible) {
         null -> AcceptOutcome.UNKNOWN
         true -> AcceptOutcome.NOT_CONFIRMED
-        false -> AcceptOutcome.CONFIRMED
+        false -> AcceptOutcome.NOT_CONFIRMED
     }
 }
 
