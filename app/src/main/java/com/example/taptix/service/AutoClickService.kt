@@ -1632,9 +1632,6 @@ class AutoClickService : AccessibilityService() {
             isClickingActive.set(ok && com.example.taptix.automation.safety.AutomationSafetyController.canProcessScreen())
             engineState = if (ok) com.example.taptix.engine.AutomationEngineState.CONNECTED_IDLE else com.example.taptix.engine.AutomationEngineState.PAUSED_BY_USER
         } else {
-            com.example.taptix.automation.safety.AutomationSafetyController.requestDisable("USER_TOGGLE")
-            isClickingActive.set(false)
-            mainHandler.removeCallbacksAndMessages(null)
             stopClicking()
             engineState = com.example.taptix.engine.AutomationEngineState.PAUSED_BY_USER
         }

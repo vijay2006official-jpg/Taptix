@@ -109,18 +109,34 @@ class AutomationSafetyControllerTest {
 
     @Test
     fun test07_EmergencyStop_IsIdempotent() {
+        // Start from ON to establish a baseline active state
+        AutomationSafetyController.requestEnable(
+            hasAccessibilityService = true,
+            masterEnabled = true,
+            isUserExplicitAction = true
+        )
         val initialGen = AutomationSafetyController.currentGeneration
-        AutomationSafetyController.emergencyStop("FIRST_STOP")
+        var listenerCount = 0
+        AutomationSafetyController.registerStopListener { listenerCount++ }
+
+        // First Stop
+        val firstResult = AutomationSafetyController.emergencyStop("FIRST_STOP")
         val genAfterFirst = AutomationSafetyController.currentGeneration
-
-        // Second immediate stop call
-        AutomationSafetyController.emergencyStop("SECOND_STOP")
-        val genAfterSecond = AutomationSafetyController.currentGeneration
-
+        assertTrue("First stop must succeed", firstResult)
         assertEquals(AutomationSafetyState.OFF, AutomationSafetyController.state)
         assertTrue(AutomationSafetyController.isStopLatched)
-        assertTrue(genAfterSecond > genAfterFirst)
-        assertTrue(genAfterFirst > initialGen)
+        assertTrue("Generation must advance on initial stop transition", genAfterFirst > initialGen)
+        assertEquals("Stop listener must be invoked exactly once", 1, listenerCount)
+
+        // Second duplicate/redundant stop call
+        val secondResult = AutomationSafetyController.emergencyStop("SECOND_STOP")
+        val genAfterSecond = AutomationSafetyController.currentGeneration
+        assertTrue("Second stop call must return true safely", secondResult)
+        assertEquals(AutomationSafetyState.OFF, AutomationSafetyController.state)
+        assertTrue(AutomationSafetyController.isStopLatched)
+        // Idempotency: Redundant stop must NOT advance generation or re-notify listeners
+        assertEquals("Generation must remain unchanged on redundant stop", genAfterFirst, genAfterSecond)
+        assertEquals("Stop listener must NOT be re-invoked on redundant stop", 1, listenerCount)
     }
 
     @Test
@@ -212,5 +228,79 @@ class AutomationSafetyControllerTest {
         assertEquals(AutomationSafetyState.OFF, AutomationSafetyController.state)
         // Post-stop assertion: actions using capturedGen must be permanently rejected
         assertFalse("Actions using stale generation token must be rejected after emergency stop", AutomationSafetyController.canExecuteAction(capturedGen))
+    }
+
+    @Test
+    fun test12_RepeatedDuplicateStopRequests_CannotTriggerClicksOrResume() {
+        AutomationSafetyController.requestEnable(
+            hasAccessibilityService = true,
+            masterEnabled = true,
+            isUserExplicitAction = true
+        )
+        val initialGen = AutomationSafetyController.currentGeneration
+        assertTrue("Controller must be ON", AutomationSafetyController.canProcessScreen())
+
+        // Execute initial STOP
+        AutomationSafetyController.emergencyStop("PRIMARY_STOP")
+        val stopGen = AutomationSafetyController.currentGeneration
+        assertTrue(stopGen > initialGen)
+        assertEquals(AutomationSafetyState.OFF, AutomationSafetyController.state)
+        assertTrue(AutomationSafetyController.isStopLatched)
+
+        // Fire 10 consecutive duplicate STOP requests
+        for (i in 1..10) {
+            val res = AutomationSafetyController.emergencyStop("REDUNDANT_STOP_$i")
+            assertTrue("Duplicate stop must succeed safely", res)
+            assertEquals("State must remain OFF", AutomationSafetyState.OFF, AutomationSafetyController.state)
+            assertTrue("Stop latch must remain active", AutomationSafetyController.isStopLatched)
+            assertEquals("Generation must not drift on duplicate stops", stopGen, AutomationSafetyController.currentGeneration)
+            assertFalse("Screen processing must remain blocked", AutomationSafetyController.canProcessScreen())
+            assertFalse("Previous tokens must be rejected", AutomationSafetyController.canExecuteAction(initialGen))
+            assertFalse("Current tokens must be rejected while OFF", AutomationSafetyController.canExecuteAction(stopGen))
+        }
+    }
+
+    @Test
+    fun test13_ConcurrentStopsAndActions_NeverResumesOrDispatches() {
+        AutomationSafetyController.requestEnable(
+            hasAccessibilityService = true,
+            masterEnabled = true,
+            isUserExplicitAction = true
+        )
+        val initialGen = AutomationSafetyController.currentGeneration
+        val threadCount = 8
+        val latch = CountDownLatch(threadCount)
+        val actionsDispatched = AtomicInteger(0)
+
+        // Half the threads repeatedly spam emergencyStop; other half try to execute actions
+        val threads = (1..threadCount).map { idx ->
+            Thread {
+                try {
+                    if (idx % 2 == 0) {
+                        for (j in 1..20) {
+                            AutomationSafetyController.emergencyStop("THREAD_${idx}_STOP_$j")
+                        }
+                    } else {
+                        for (j in 1..20) {
+                            if (AutomationSafetyController.canExecuteAction(initialGen)) {
+                                actionsDispatched.incrementAndGet()
+                            }
+                        }
+                    }
+                } finally {
+                    latch.countDown()
+                }
+            }
+        }
+
+        threads.forEach { it.start() }
+        assertTrue("Concurrent operations must finish within timeout", latch.await(4, TimeUnit.SECONDS))
+
+        // System must be strictly OFF and latched
+        assertEquals(AutomationSafetyState.OFF, AutomationSafetyController.state)
+        assertTrue(AutomationSafetyController.isStopLatched)
+        assertFalse(AutomationSafetyController.canProcessScreen())
+        assertFalse(AutomationSafetyController.canExecuteAction(initialGen))
+        assertFalse(AutomationSafetyController.canExecuteAction(AutomationSafetyController.currentGeneration))
     }
 }

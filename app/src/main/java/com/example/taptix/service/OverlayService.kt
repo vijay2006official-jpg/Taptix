@@ -644,7 +644,6 @@ class OverlayService : Service() {
     private fun togglePlayPause() {
         if (isPlaying) {
             prefsRepo.saveMasterControl(false)
-            AutoClickService.instance?.setClickingActive(false)
             stopClickingSequence()
         } else {
             prefsRepo.saveMasterControl(true)

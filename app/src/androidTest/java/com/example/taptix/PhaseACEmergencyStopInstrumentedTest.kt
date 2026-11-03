@@ -171,6 +171,11 @@ class PhaseACEmergencyStopInstrumentedTest {
         assertTrue(AutomationSafetyController.isStopLatched)
         assertTrue("Generation counter must advance monotonically", AutomationSafetyController.currentGeneration > initialGen)
         assertFalse(AutomationSafetyController.canProcessScreen())
+
+        // Verify idempotency on subsequent stop
+        val genAfterAllStops = AutomationSafetyController.currentGeneration
+        AutomationSafetyController.emergencyStop("EXTRA_STOP")
+        assertEquals("Redundant stop must not increment generation", genAfterAllStops, AutomationSafetyController.currentGeneration)
     }
 
     /**

@@ -108,6 +108,13 @@ object AutomationSafetyController {
      */
     @Synchronized
     fun emergencyStop(reason: String = "USER_EMERGENCY_STOP"): Boolean {
+        // Idempotency: If already OFF and stop is latched, one logical STOP is already established.
+        // Redundant / cascading stop calls are suppressed without side-effects.
+        if (currentState.get() == AutomationSafetyState.OFF && stopLatched.get()) {
+            logD("Emergency STOP already active and latched. Redundant request suppressed: reason=$reason")
+            return true
+        }
+
         logW("EMERGENCY STOP TRIGGERED: reason=$reason, gen=${generationCounter.get()}")
 
         // 1. Enter STOPPING immediately
