@@ -5094,6 +5094,10 @@ class AutoClickService : AccessibilityService() {
 
 
     ) {
+        // Centralized Automation Safety Controller Gate - immediately abort if OFF, STOPPING, or BLOCKED
+        if (!com.example.taptix.automation.safety.AutomationSafetyController.canProcessScreen()) {
+            return
+        }
 
 
 

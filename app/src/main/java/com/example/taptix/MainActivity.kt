@@ -628,11 +628,7 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
 
-        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-
-
-
-        isBatteryOptIgnored = pm?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+        isBatteryOptIgnored = com.example.taptix.util.BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
 
 
 
@@ -787,45 +783,15 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
 
             onOpenBatterySettings = {
-
-
-
                 showBatteryGuidance = false
-
-
-
-                try {
-
-
-
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-
-
-
-                        data = Uri.parse("package:${context.packageName}")
-
-
-
-                    }
-
-
-
-                    context.startActivity(intent)
-
-
-
-                } catch (e: Exception) {
-
-
-
-                    context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-
-
-
+                val launchResult = com.example.taptix.util.BatteryOptimizationHelper.openBatterySettings(context)
+                if (launchResult == com.example.taptix.util.BatterySettingsLaunchResult.FAILED_ALL) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Could not open device battery settings automatically. Please open Settings -> Apps -> Taptix manually.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 }
-
-
-
             }
 
 
