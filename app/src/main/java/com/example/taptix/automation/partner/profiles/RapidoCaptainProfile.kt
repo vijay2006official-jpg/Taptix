@@ -20,7 +20,7 @@ class RapidoCaptainProfile : BasePartnerProfile() {
     )
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "ACCEPTED", "START TRIP", "PICKUP", "CALL CUSTOMER", "CUSTOMER DETAILS", "PASSENGER"
+        "ACCEPTED", "RIDE ACCEPTED", "START TRIP"
     )
 
     override val cancellationKeywords: List<String> = listOf(

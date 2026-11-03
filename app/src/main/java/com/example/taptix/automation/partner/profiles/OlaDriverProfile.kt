@@ -21,8 +21,7 @@ class OlaDriverProfile : BasePartnerProfile() {
     )
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "CONFIRMED", "RIDE ACCEPTED", "BOOKING ACCEPTED", "START TRIP",
-        "NAVIGATE", "ARRIVING", "CALL CUSTOMER", "CUSTOMER"
+        "CONFIRMED", "RIDE ACCEPTED", "BOOKING ACCEPTED", "START TRIP"
     )
 
     override val cancellationKeywords: List<String> = listOf(

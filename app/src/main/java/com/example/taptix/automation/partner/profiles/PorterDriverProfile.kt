@@ -21,7 +21,7 @@ class PorterDriverProfile : BasePartnerProfile() {
     )
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "ORDER ACCEPTED", "START TRIP", "NAVIGATE TO PICKUP", "ORDER DETAILS", "WAYPOINT"
+        "ORDER ACCEPTED", "START TRIP", "TRIP ACCEPTED"
     )
 
     override val cancellationKeywords: List<String> = listOf(

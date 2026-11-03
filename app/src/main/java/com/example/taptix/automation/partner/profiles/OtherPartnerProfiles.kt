@@ -15,7 +15,7 @@ class LyftDriverProfile : BasePartnerProfile() {
     )
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "ACCEPTED", "NAVIGATE", "ARRIVING", "PICK UP"
+        "ACCEPTED", "RIDE ACCEPTED"
     )
 
     override val cancellationKeywords: List<String> = listOf(
@@ -36,7 +36,7 @@ class GrabDriverProfile : BasePartnerProfile() {
     )
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "JOB ACCEPTED", "ACCEPTED", "PICK UP", "NAVIGATE"
+        "JOB ACCEPTED", "ACCEPTED"
     )
 
     override val cancellationKeywords: List<String> = listOf(
@@ -57,7 +57,7 @@ class DoorDashDriverProfile : BasePartnerProfile() {
     )
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "ORDER ACCEPTED", "HEAD TO STORE", "STORE", "PICK UP"
+        "ORDER ACCEPTED", "DELIVERY ACCEPTED"
     )
 
     override val cancellationKeywords: List<String> = listOf(
@@ -77,7 +77,7 @@ class GenericPartnerProfile(
     override val status: PartnerProfileStatus = PartnerProfileStatus.FALLBACK_GENERIC
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "ACCEPTED", "CONFIRMED", "NAVIGATE", "PICKUP", "START TRIP", "ARRIVING"
+        "ACCEPTED", "CONFIRMED", "BOOKING ACCEPTED", "RIDE ACCEPTED", "START TRIP"
     )
 
     override val cancellationKeywords: List<String> = listOf(

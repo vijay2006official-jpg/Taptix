@@ -23,7 +23,7 @@ class NammaYatriProfile : BasePartnerProfile() {
     )
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "BOOKING ACCEPTED", "ACCEPTED BY YOU", "START TRIP", "ARRIVING", "NAVIGATE"
+        "BOOKING ACCEPTED", "ACCEPTED BY YOU", "START TRIP"
     )
 
     override val cancellationKeywords: List<String> = listOf(

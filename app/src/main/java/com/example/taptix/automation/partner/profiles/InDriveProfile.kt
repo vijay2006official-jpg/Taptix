@@ -20,7 +20,7 @@ class InDriveProfile : BasePartnerProfile() {
     )
 
     override val positiveConfirmationKeywords: List<String> = listOf(
-        "RIDE ACCEPTED", "HEAD TO", "CALL PASSENGER", "CHAT", "PASSENGER", "ACCEPTED"
+        "RIDE ACCEPTED", "ACCEPTED", "DEAL ACCEPTED"
     )
 
     override val cancellationKeywords: List<String> = listOf(

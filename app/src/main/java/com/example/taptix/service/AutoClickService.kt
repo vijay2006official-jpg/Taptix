@@ -5823,7 +5823,8 @@ class AutoClickService : AccessibilityService() {
         distanceKm: Double = 0.0,
         destination: String = "",
         stateMachine: com.example.taptix.engine.BookingStateMachine? = null,
-        profile: com.example.taptix.automation.partner.PartnerUiProfile? = null
+        profile: com.example.taptix.automation.partner.PartnerUiProfile? = null,
+        dispatchTimestamp: Long = 0L
     ) {
         val roots = mutableListOf<AccessibilityNodeInfo>()
         try {
@@ -5925,7 +5926,8 @@ class AutoClickService : AccessibilityService() {
                         verifyAcceptOutcome(
                             appPkg, keywords, matchText, clickMethod, settings,
                             centerX, centerY, retryAttempt = retryAttempt + 1,
-                            fare, distanceKm, destination, stateMachine, resolvedProfile
+                            fare, distanceKm, destination, stateMachine, resolvedProfile,
+                            dispatchTimestamp = System.currentTimeMillis()
                         )
                     }, com.example.taptix.engine.AcceptVerifier.RETRY_VERIFY_DELAY_MS)
                     return
@@ -6211,7 +6213,8 @@ class AutoClickService : AccessibilityService() {
                 appPkg, partnerUiProfile.acceptKeywords.ifEmpty { keywords }, matchText, clickMethod, settings,
                 centerX, centerY, retryAttempt = 0,
                 offer.fare ?: 0.0, (offer.tripDistanceKm ?: offer.pickupDistanceKm) ?: 0.0,
-                offer.destinationAddress, stateMachine, partnerUiProfile
+                offer.destinationAddress, stateMachine, partnerUiProfile,
+                dispatchTimestamp = now
             )
         }, com.example.taptix.engine.AcceptVerifier.VERIFY_DELAY_MS)
 
