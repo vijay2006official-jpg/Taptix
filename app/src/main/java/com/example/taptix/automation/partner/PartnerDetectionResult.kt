@@ -20,7 +20,10 @@ enum class DetectionStatus {
     UNRECOGNIZED_LAYOUT,
 
     /** Package is not a recognized or allowlisted partner application. */
-    UNSUPPORTED_PARTNER
+    UNSUPPORTED_PARTNER,
+
+    /** View hierarchy became stale or was recycled during evaluation. */
+    STALE_ACCESSIBILITY_TREE
 }
 
 /**
