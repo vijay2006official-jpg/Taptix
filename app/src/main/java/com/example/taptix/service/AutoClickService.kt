@@ -5822,7 +5822,8 @@ class AutoClickService : AccessibilityService() {
         fare: Double = 0.0,
         distanceKm: Double = 0.0,
         destination: String = "",
-        stateMachine: com.example.taptix.engine.BookingStateMachine? = null
+        stateMachine: com.example.taptix.engine.BookingStateMachine? = null,
+        profile: com.example.taptix.automation.partner.PartnerUiProfile? = null
     ) {
         val roots = mutableListOf<AccessibilityNodeInfo>()
         try {
@@ -5839,14 +5840,21 @@ class AutoClickService : AccessibilityService() {
         val isButtonStillVisible = stillVisibleNode != null
         val isButtonEnabled = stillVisibleNode?.isEnabled ?: false
 
-        // Check for positive confirmation signals across the app screen tree
+        val resolvedProfile = profile ?: com.example.taptix.automation.partner.PartnerProfileResolver.resolve(
+            appPkg,
+            settings.targetAppPackages.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        )
+        val positiveKeywords = ((resolvedProfile?.positiveConfirmationKeywords ?: emptyList()) + com.example.taptix.engine.AcceptVerifier.POSITIVE_CONFIRMATION_KEYWORDS).distinct()
+        val negativeKeywords = ((resolvedProfile?.cancellationKeywords ?: emptyList()) + com.example.taptix.engine.AcceptVerifier.EXPIRY_OR_CANCELLATION_KEYWORDS).distinct()
+
+        // Check for positive confirmation signals across the app screen tree (profile-specific + global)
         val hasPositiveConfirmation = appRoots.any { root ->
-            findAnyKeywordInTree(root, com.example.taptix.engine.AcceptVerifier.POSITIVE_CONFIRMATION_KEYWORDS) != null
+            findAnyKeywordInTree(root, positiveKeywords) != null
         }
 
-        // Check for cancellation or expiry signals across the app screen tree
+        // Check for cancellation or expiry signals across the app screen tree (profile-specific + global)
         val hasNegativeSignal = appRoots.any { root ->
-            findAnyKeywordInTree(root, com.example.taptix.engine.AcceptVerifier.EXPIRY_OR_CANCELLATION_KEYWORDS) != null
+            findAnyKeywordInTree(root, negativeKeywords) != null
         }
 
         val outcome = if (roots.isEmpty()) {
@@ -5917,7 +5925,7 @@ class AutoClickService : AccessibilityService() {
                         verifyAcceptOutcome(
                             appPkg, keywords, matchText, clickMethod, settings,
                             centerX, centerY, retryAttempt = retryAttempt + 1,
-                            fare, distanceKm, destination, stateMachine
+                            fare, distanceKm, destination, stateMachine, resolvedProfile
                         )
                     }, com.example.taptix.engine.AcceptVerifier.RETRY_VERIFY_DELAY_MS)
                     return
@@ -5960,269 +5968,139 @@ class AutoClickService : AccessibilityService() {
     }
 
     private fun findAndExecuteAccept(
-
         rootNode: AccessibilityNodeInfo,
-
         keywords: List<String>,
-
         settings: com.example.taptix.data.AppSettings = prefsRepo.getSettings()
-
     ): Boolean {
-
         // Step 0: Ensure root node and matched node NEVER belong to Taptix, System UI, or Settings
-
-        val rootPkg = (rootNode.packageName?.toString() ?: "").lowercase()
-
+        val rootPkg = (rootNode.packageName?.toString() ?: "").trim().lowercase()
         val ownPkg = packageName.lowercase()
-
         if (rootPkg.contains("taptix") || rootPkg == ownPkg || rootPkg.contains("systemui") || rootPkg.contains("settings")) {
-
             return false
-
         }
-
-
-
-        val matchedNode = findNodeWithKeywords(rootNode, keywords) ?: return false
-
-
-
-        val matchedPkg = (matchedNode.packageName?.toString() ?: "").lowercase()
-
-        if (matchedPkg.contains("taptix") || matchedPkg == ownPkg || matchedPkg.contains("systemui") || matchedPkg.contains("settings")) {
-
-            return false
-
-        }
-
-
-
-        // Strict Target App Whitelist: ONLY accept genuine driver partner apps
-
-        val defaultRideApps = listOf(
-
-            "com.ubercab.driver",
-
-            "com.ubercab",
-
-            "com.olacabs.driver",
-
-            "com.olacabs.partner",
-
-            "com.olacabs",
-
-            "com.rapido.captain",
-
-            "com.rapido.passenger",
-
-            "com.rapido",
-
-            "sinet.startup.indriver",
-
-            "com.indriver",
-
-            "indriver",
-
-            "in.porter.partner",
-
-            "in.porter",
-
-            "com.theporter",
-
-            "porter",
-
-            "com.nammayatri",
-
-            "movingtech.nammatrip.driver",
-
-            "movingtech.nammayatri.driver",
-
-            "in.juspay.nammayatri",
-
-            "in.juspay.yatrisathi",
-
-            "com.moveinsync",
-
-            "me.lyft.driver",
-
-            "com.grabtaxi.driver2",
-
-            "com.dd.driver"
-
-        )
 
         val customTargets = settings.targetAppPackages.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
 
-        val allTargets = (defaultRideApps + customTargets).distinct()
+        // Step 1: Resolve partner profile candidate package
+        var candidatePkg = rootPkg
+        var partnerUiProfile = com.example.taptix.automation.partner.PartnerProfileResolver.resolve(candidatePkg, customTargets)
 
-
-
-        val candidatePkg = if (matchedPkg.isNotBlank()) matchedPkg else rootPkg
-
-        val isPartnerApp = allTargets.any { target ->
-
-            candidatePkg.contains(target) || rootPkg.contains(target) || matchedPkg.contains(target)
-
-        } || listOf("uber", "ola", "rapido", "indrive", "porter", "nammayatri", "yatri", "lyft", "grab").any { kw ->
-
-            candidatePkg.contains(kw) || rootPkg.contains(kw) || matchedPkg.contains(kw)
-
+        if (partnerUiProfile == null) {
+            val matchedNode = findNodeWithKeywords(rootNode, keywords) ?: return false
+            val matchedPkg = (matchedNode.packageName?.toString() ?: "").trim().lowercase()
+            if (matchedPkg.contains("taptix") || matchedPkg == ownPkg || matchedPkg.contains("systemui") || matchedPkg.contains("settings")) {
+                return false
+            }
+            if (matchedPkg.isNotBlank()) {
+                candidatePkg = matchedPkg
+                partnerUiProfile = com.example.taptix.automation.partner.PartnerProfileResolver.resolve(candidatePkg, customTargets)
+            }
         }
 
-
-
-        if (!isPartnerApp) {
-
-            // Not a supported ride partner app, ignore
-
+        // Safety Condition 3: Unknown partners must produce zero clicks
+        if (partnerUiProfile == null) {
+            Log.d(TAG, "[TaptixAutoAccept] Candidate package '$candidatePkg' is not a recognized partner app, producing 0 clicks")
             return false
-
         }
 
+        // Safety Condition 4: Do not use GenericPartnerProfile as an unrestricted automatic-click fallback
+        if (partnerUiProfile is com.example.taptix.automation.partner.profiles.GenericPartnerProfile) {
+            val isExplicitlyAllowed = customTargets.any { it.equals(candidatePkg, ignoreCase = true) }
+            if (!isExplicitlyAllowed) {
+                Log.w(TAG, "[TaptixAutoAccept] GenericPartnerProfile rejected: '$candidatePkg' is not in explicit custom target list")
+                return false
+            }
+        }
 
-
-        val appPkg = if (candidatePkg.isNotBlank()) candidatePkg else "ride_partner"
-
-        Log.i(TAG, "[TaptixAutoAccept] Detected incoming booking screen candidate in package: $appPkg")
-
-
+        val appPkg = candidatePkg
+        Log.i(TAG, "[TaptixAutoAccept] Detected incoming booking screen candidate in package: $appPkg via profile: ${partnerUiProfile.displayName} (v${partnerUiProfile.profileVersion})")
 
         // Per-app profile: check if auto-accept is enabled for this specific app
-
-        val profile = prefsRepo.getAppProfile(appPkg)
-
-        if (!profile.enabled) {
-
+        val appProfile = prefsRepo.getAppProfile(appPkg)
+        if (!appProfile.enabled) {
             Log.d(TAG, "[TaptixAutoAccept] Per-app profile disabled for $appPkg, skipping")
-
             return false
-
         }
 
+        // Step 2: Use Partner UI Profile to detect actionable accept control
+        val detection = partnerUiProfile.findAcceptControl(rootNode, appPkg)
+        if (!detection.isActionable || detection.acceptNode == null) {
+            // Safety Condition 3: Unrecognized layouts must produce zero clicks
+            Log.d(TAG, "[TaptixAutoAccept] Layout unrecognized or no actionable control for $appPkg: ${detection.diagnosticMessage}")
+            return false
+        }
 
-
-        val rawRect = Rect()
-
-        matchedNode.getBoundsInScreen(rawRect)
-
-        if (rawRect.width() <= 0 || rawRect.height() <= 0) return false
-
-
+        val targetNode: AccessibilityNodeInfo = detection.acceptNode!!
+        val rawRect: Rect = detection.targetBounds
+        val isSwipeFromProfile: Boolean = detection.isSwipeAction
+        val matchText = detection.matchedSelectorText ?: (targetNode.text ?: targetNode.contentDescription ?: "Order").toString().trim()
 
         // Structured Offer Parsing and Rule Evaluation
-
         var fullTreeRoot = rootNode
         while (fullTreeRoot.parent != null) {
             fullTreeRoot = fullTreeRoot.parent ?: break
         }
         val offer = com.example.taptix.engine.OfferParser.parse(fullTreeRoot, appPkg)
 
-
-
         // Duplicate booking prevention
-
-        val matchText = (matchedNode.text ?: matchedNode.contentDescription ?: "Order").toString().trim()
-
         val offerSignature = com.example.taptix.engine.DuplicateOfferGuard.signature(appPkg, offer.fare, offer.pickupDistanceKm, matchText)
-
         val now = System.currentTimeMillis()
-
         if (offerGuard.isDuplicate(offerSignature, now)) {
-
             Log.d(TAG, "[TaptixAutoAccept] Duplicate booking event ignored for: $offerSignature")
-
             return false
-
         }
-
-
 
         val smartRules = prefsRepo.getSmartAcceptRules()
-
         val targetAreasOn = prefsRepo.isTargetAreasEnabled()
-
         val preferredAreas = prefsRepo.getSettings().preferredAreas
-
         val effectiveRules = if (targetAreasOn && preferredAreas.isNotBlank()) {
-
             smartRules.copy(
-
                 destinationFilterEnabled = true,
-
                 destinationKeywords = preferredAreas
-
             )
-
         } else {
-
             smartRules
-
         }
-
-
 
         val activeZones = if (settings.mapZoneEnabled) prefsRepo.getActiveZones() else emptyList()
-
         val driverLoc = getLastKnownLocation()
 
-
-
         val evalResult = com.example.taptix.engine.OfferRuleEngine.evaluate(
-
             offer = offer,
-
             rules = effectiveRules,
-
             activeZones = activeZones,
-
             driverLocation = driverLoc,
-
-            includeKeywords = keywords,
-
+            includeKeywords = partnerUiProfile.acceptKeywords.ifEmpty { keywords },
             excludeKeywords = settings.negativeKeywords.split(",").map { it.trim() }.filter { it.isNotEmpty() },
-
             ultraMode = settings.ultraModeEnabled
-
         )
-
-
 
         if (!evalResult.isAccepted) {
-
             val reason = evalResult.rejectedReason ?: "Offer rejected by smart rules"
-
             Log.i(TAG, "[TaptixAutoAccept] Offer rejected: $reason")
-
             val status = when {
-
                 reason.contains("negative keyword", ignoreCase = true) -> com.example.taptix.model.LogStatus.REJECTED_KEYWORD
-
                 reason.contains("work zone", ignoreCase = true) || reason.contains("location unavailable", ignoreCase = true) -> com.example.taptix.model.LogStatus.OUTSIDE_ZONE
-
                 else -> com.example.taptix.model.LogStatus.ERROR
-
             }
-
             com.example.taptix.data.ActivityLogManager.getInstance(applicationContext).addLog(
-            appName = getReadableAppName(appPkg),
-            actionText = "Skipped offer",
-            status = status,
-            details = reason,
-            fare = offer.fare,
-            distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm,
-            destination = offer.destinationAddress
-        )
-        try {
-            com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
-                wasAccepted = false,
-                distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm
+                appName = getReadableAppName(appPkg),
+                actionText = "Skipped offer",
+                status = status,
+                details = reason,
+                fare = offer.fare,
+                distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm,
+                destination = offer.destinationAddress
             )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to record rejected booking", e)
-        }
-
+            try {
+                com.example.taptix.data.AnalyticsManager.getInstance(applicationContext).recordBooking(
+                    wasAccepted = false,
+                    distanceKm = offer.tripDistanceKm ?: offer.pickupDistanceKm
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to record rejected booking", e)
+            }
             return false
-
         }
 
         val stateMachine = com.example.taptix.engine.BookingStateMachine(offerSignature, offerGuard)
@@ -6236,32 +6114,6 @@ class AutoClickService : AccessibilityService() {
             return false
         }
 
-        // Identify the exact clickable button (avoiding full-screen parent layouts)
-
-        var targetNode: AccessibilityNodeInfo = matchedNode
-
-        var candidate: AccessibilityNodeInfo? = matchedNode
-
-        while (candidate != null) {
-
-            val cRect = Rect()
-
-            candidate.getBoundsInScreen(cRect)
-
-            if (candidate.isClickable && cRect.height() in 35..500 && cRect.width() >= 60) {
-
-                targetNode = candidate
-
-                break
-
-            }
-
-            candidate = candidate.parent
-
-        }
-
-
-
         // Verify that target button is enabled and visible
         if (!targetNode.isEnabled) {
             Log.d(TAG, "[TaptixAutoAccept] Button is disabled, ignoring candidate")
@@ -6272,12 +6124,7 @@ class AutoClickService : AccessibilityService() {
             return false
         }
 
-        val targetRect = Rect()
-
-        targetNode.getBoundsInScreen(targetRect)
-
-        val finalRect = if (targetRect.width() > 0 && targetRect.height() in 35..500) targetRect else rawRect
-
+        val finalRect = rawRect
         if (!com.example.taptix.engine.BookingDetectionValidator.isValidButtonBounds(finalRect.width(), finalRect.height())) {
             Log.d(TAG, "[TaptixAutoAccept] Button bounds $finalRect outside valid limits, skipping")
             return false
@@ -6307,16 +6154,16 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        val nodeText = (matchedNode.text?.toString() ?: matchedNode.contentDescription?.toString() ?: "").uppercase()
+        val nodeText = (targetNode.text?.toString() ?: targetNode.contentDescription?.toString() ?: "").uppercase()
 
-        val isSwipe = nodeText.contains("SWIPE") || nodeText.contains("SLIDE") || (matchedNode.className?.toString() ?: "").contains("SeekBar", ignoreCase = true)
+        val isSwipe = isSwipeFromProfile || nodeText.contains("SWIPE") || nodeText.contains("SLIDE") || (targetNode.className?.toString() ?: "").contains("SeekBar", ignoreCase = true)
 
         // Eliminate dual-dispatch conflict: prioritize immediate direct node click (ACTION_CLICK),
         // and fall back to gesture dispatch ONLY when direct action non-dispatch is reliably confirmed.
         val clickMethod = com.example.taptix.engine.AcceptClickExecutor.execute(
             isSwipe = isSwipe,
             directClick = {
-                val candidates = listOf(targetNode, matchedNode)
+                val candidates = listOf(targetNode)
                 for (node in candidates) {
                     if (node.isClickable) {
                         val ok = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
@@ -6361,10 +6208,10 @@ class AutoClickService : AccessibilityService() {
 
         mainHandler.postDelayed({
             verifyAcceptOutcome(
-                appPkg, keywords, matchText, clickMethod, settings,
+                appPkg, partnerUiProfile.acceptKeywords.ifEmpty { keywords }, matchText, clickMethod, settings,
                 centerX, centerY, retryAttempt = 0,
                 offer.fare ?: 0.0, (offer.tripDistanceKm ?: offer.pickupDistanceKm) ?: 0.0,
-                offer.destinationAddress, stateMachine
+                offer.destinationAddress, stateMachine, partnerUiProfile
             )
         }, com.example.taptix.engine.AcceptVerifier.VERIFY_DELAY_MS)
 
