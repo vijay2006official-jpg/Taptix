@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Taptix v2.3 Release Notes & Installation Guide
+    url: https://github.com/vijay2006official-jpg/Taptix/releases/tag/v2.3
+    about: Review official release notes, verified checksums, and sideloading steps for v2.3.
+  - name: Privacy Policy & Operational Safety
+    url: https://github.com/vijay2006official-jpg/Taptix#privacy--operational-policy
+    about: Read Taptix's on-device privacy guarantee and third-party terms compliance statement.
