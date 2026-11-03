@@ -52,18 +52,34 @@ object PartnerPackages {
 }
 
 /** Prevents the same booking popup from being tapped more than once. */
-class DuplicateOfferGuard(private val windowMs: Long = DEFAULT_WINDOW_MS) {
+class DuplicateOfferGuard(
+    private val windowMs: Long = DEFAULT_WINDOW_MS,
+    private val maxCapacity: Int = 100
+) {
     private var lastSignature: String = ""
     private var lastTimestamp: Long = 0L
 
+    // Bounded thread-safe cache for tracking multiple concurrent offers across different partners
+    private val recentSignatures = object : java.util.LinkedHashMap<String, Long>(maxCapacity, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
+            return size > maxCapacity
+        }
+    }
+
     @Synchronized
-    fun isDuplicate(signature: String, now: Long): Boolean =
-        signature == lastSignature && (now - lastTimestamp) < windowMs
+    fun isDuplicate(signature: String, now: Long): Boolean {
+        pruneExpired(now)
+        if (signature == lastSignature && (now - lastTimestamp) < windowMs) return true
+        val recordedAt = recentSignatures[signature] ?: return false
+        return (now - recordedAt) < windowMs
+    }
 
     @Synchronized
     fun record(signature: String, now: Long) {
+        pruneExpired(now)
         lastSignature = signature
         lastTimestamp = now
+        recentSignatures[signature] = now
     }
 
     /**
@@ -74,12 +90,33 @@ class DuplicateOfferGuard(private val windowMs: Long = DEFAULT_WINDOW_MS) {
      */
     @Synchronized
     fun isDuplicateOrRecord(signature: String, now: Long): Boolean {
-        if (signature == lastSignature && (now - lastTimestamp) < windowMs) {
+        pruneExpired(now)
+        val isDup = (signature == lastSignature && (now - lastTimestamp) < windowMs) ||
+                ((recentSignatures[signature]?.let { (now - it) < windowMs }) == true)
+        if (isDup) {
             return true
         }
         lastSignature = signature
         lastTimestamp = now
+        recentSignatures[signature] = now
         return false
+    }
+
+    @Synchronized
+    fun clear() {
+        lastSignature = ""
+        lastTimestamp = 0L
+        recentSignatures.clear()
+    }
+
+    private fun pruneExpired(now: Long) {
+        val iterator = recentSignatures.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (now - entry.value >= windowMs) {
+                iterator.remove()
+            }
+        }
     }
 
     companion object {
@@ -139,6 +176,46 @@ object AcceptVerifier {
     /** Secondary retry timeout for slow-rendering screens. */
     const val RETRY_VERIFY_DELAY_MS = 450L
 
+    /**
+     * Tier 1: Strong compound confirmation keywords.
+     * Unambiguously confirm acceptance of an offer once the offer/accept button is gone.
+     */
+    val STRONG_CONFIRMATION_KEYWORDS = listOf(
+        "RIDE ACCEPTED", "BOOKING ACCEPTED", "TRIP ACCEPTED",
+        "ACCEPTED BY YOU", "ORDER ACCEPTED", "DELIVERY ACCEPTED",
+        "JOB ACCEPTED", "DEAL ACCEPTED", "TASK ACCEPTED"
+    )
+
+    /**
+     * Tier 2: Generic / single-word confirmation tokens.
+     * MANDATORY SAFETY RULE: Must NEVER confirm acceptance independently.
+     * Requires corroborating contextual evidence (driver assignment, passenger details, active trip state).
+     */
+    val GENERIC_CONFIRMATION_KEYWORDS = listOf(
+        "ACCEPTED", "CONFIRMED", "START TRIP"
+    )
+
+    /**
+     * Prohibited standalone navigation phrases.
+     * MANDATORY SAFETY RULE: Generic navigation or pickup instructions must never independently confirm acceptance.
+     */
+    val PROHIBITED_STANDALONE_NAVIGATION_KEYWORDS = listOf(
+        "NAVIGATE TO PICKUP", "NAVIGATE", "NAVIGATION", "ARRIVING",
+        "HEAD TO", "ON THE WAY", "WAY TO PICKUP"
+    )
+
+    /**
+     * Corroborating contextual evidence keywords.
+     * Proves active driver assignment, passenger identity, order ID, or in-progress trip state.
+     */
+    val CONTEXTUAL_EVIDENCE_KEYWORDS = listOf(
+        "PASSENGER", "RIDER", "CUSTOMER", "CLIENT",
+        "PICKUP:", "DROP:", "DROP-OFF",
+        "CRN", "ORDER #", "TRIP #", "BOOKING ID", "PIN",
+        "ARRIVE AT PICKUP", "ON TRIP", "TRIP IN PROGRESS", "PICKING UP"
+    )
+
+    // Legacy list for backwards compatibility with tests and callers
     val POSITIVE_CONFIRMATION_KEYWORDS = listOf(
         "ACCEPTED", "RIDE ACCEPTED", "BOOKING ACCEPTED", "TRIP ACCEPTED",
         "ACCEPTED BY YOU"
@@ -149,6 +226,52 @@ object AcceptVerifier {
         "TOO LATE", "ANOTHER DRIVER", "NO LONGER AVAILABLE", "ORDER TIMED OUT",
         "FAILED", "TRIP CANCELLED", "LOST"
     )
+
+    /**
+     * Evaluates acceptance confirmation using the formal tiered verification model:
+     * - Button still visible -> NOT_CONFIRMED
+     * - Screen indeterminate -> UNKNOWN
+     * - Cancellation/expiry -> NOT_CONFIRMED (takes strict precedence)
+     * - Standalone navigation alone -> NOT_CONFIRMED (Rule 1)
+     * - Strong positive confirmation -> CONFIRMED
+     * - Generic confirmation with contextual evidence -> CONFIRMED (Rule 2)
+     * - Generic confirmation WITHOUT contextual evidence -> NOT_CONFIRMED (Rule 2)
+     * - Button disappearance alone -> NOT_CONFIRMED
+     */
+    fun evaluateTiered(
+        acceptButtonStillVisible: Boolean?,
+        hasStrongPositive: Boolean,
+        hasGenericPositive: Boolean,
+        hasContextualEvidence: Boolean,
+        hasNegativeOrCancelled: Boolean,
+        hasStandaloneNavOnly: Boolean = false
+    ): AcceptOutcome {
+        if (acceptButtonStillVisible == null) return AcceptOutcome.UNKNOWN
+        if (acceptButtonStillVisible) return AcceptOutcome.NOT_CONFIRMED
+        if (hasNegativeOrCancelled) return AcceptOutcome.NOT_CONFIRMED
+
+        // Rule 1: Generic navigation or pickup instructions must never independently confirm acceptance
+        if (hasStandaloneNavOnly && !hasStrongPositive && !hasGenericPositive) {
+            return AcceptOutcome.NOT_CONFIRMED
+        }
+
+        // Tier 1: Strong explicit compound confirmation
+        if (hasStrongPositive) {
+            return AcceptOutcome.CONFIRMED
+        }
+
+        // Tier 2: Generic confirmation token requires corroborating contextual evidence
+        if (hasGenericPositive) {
+            return if (hasContextualEvidence) {
+                AcceptOutcome.CONFIRMED
+            } else {
+                AcceptOutcome.NOT_CONFIRMED
+            }
+        }
+
+        // Button disappearance alone without positive confirmation cannot establish successful acceptance
+        return AcceptOutcome.NOT_CONFIRMED
+    }
 
     /**
      * Comprehensive acceptance evaluation ensuring button disappearance alone
@@ -196,6 +319,7 @@ object ControlledRetryPolicy {
      * - App in foreground must still match the target partner app
      * - No negative/cancellation messages on screen
      * - No positive confirmation messages on screen
+     * - Initial click method must NOT be UNKNOWN_DISPATCH (strictly no speculative retries on unknown dispatch)
      */
     fun isRetrySafe(
         currentAttempts: Int,
@@ -204,8 +328,10 @@ object ControlledRetryPolicy {
         isButtonEnabled: Boolean,
         isForegroundTargetApp: Boolean,
         hasNegativeSignal: Boolean,
-        hasPositiveConfirmation: Boolean
+        hasPositiveConfirmation: Boolean,
+        initialClickMethod: ClickMethod = ClickMethod.DIRECT_CLICK
     ): Boolean {
+        if (initialClickMethod == ClickMethod.UNKNOWN_DISPATCH) return false // No speculative retries on unknown dispatch!
         if (!shouldRetry(currentAttempts, outcome)) return false
         if (!isButtonStillVisible) return false
         if (!isButtonEnabled) return false // Button disabled = already processing first click!
@@ -292,6 +418,9 @@ class BookingStateMachine(
     var clickAttempts: Int = 0
         private set
 
+    var lastClickMethod: ClickMethod? = null
+        private set
+
     var failureReason: String? = null
         private set
 
@@ -319,6 +448,7 @@ class BookingStateMachine(
         if (clickAttempts > ControlledRetryPolicy.MAX_RETRIES) return false
         if (currentState != BookingState.FILTER_MATCHED && currentState != BookingState.CLICK_ATTEMPTED) return false
         clickAttempts++
+        lastClickMethod = method
         currentState = BookingState.CLICK_ATTEMPTED
         return true
     }
@@ -334,11 +464,15 @@ class BookingStateMachine(
             }
             AcceptOutcome.NOT_CONFIRMED -> {
                 val retriesUsed = clickAttempts - 1
-                if (ControlledRetryPolicy.shouldRetry(retriesUsed, outcome)) {
+                if (lastClickMethod != ClickMethod.UNKNOWN_DISPATCH && ControlledRetryPolicy.shouldRetry(retriesUsed, outcome)) {
                     // Allowed exactly 1 retry: remain in CLICK_ATTEMPTED
                     false
                 } else {
-                    failureReason = "ACCEPTANCE_NOT_CONFIRMED"
+                    failureReason = if (lastClickMethod == ClickMethod.UNKNOWN_DISPATCH) {
+                        "UNKNOWN_DISPATCH_UNCONFIRMED_TERMINATED"
+                    } else {
+                        "ACCEPTANCE_NOT_CONFIRMED"
+                    }
                     false
                 }
             }
@@ -364,4 +498,3 @@ class BookingStateMachine(
         }
     }
 }
-

@@ -5902,26 +5902,41 @@ class AutoClickService : AccessibilityService() {
             appPkg,
             settings.targetAppPackages.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
         )
-        val positiveKeywords = ((resolvedProfile?.positiveConfirmationKeywords ?: emptyList()) + com.example.taptix.engine.AcceptVerifier.POSITIVE_CONFIRMATION_KEYWORDS).distinct()
+        val allPositiveKeywords = ((resolvedProfile?.positiveConfirmationKeywords ?: emptyList()) + com.example.taptix.engine.AcceptVerifier.POSITIVE_CONFIRMATION_KEYWORDS).distinct()
         val negativeKeywords = ((resolvedProfile?.cancellationKeywords ?: emptyList()) + com.example.taptix.engine.AcceptVerifier.EXPIRY_OR_CANCELLATION_KEYWORDS).distinct()
 
-        // Check for positive confirmation signals across the app screen tree (profile-specific + global)
-        val hasPositiveConfirmation = appRoots.any { root ->
-            findAnyKeywordInTree(root, positiveKeywords) != null
-        }
+        // Tier 1: Strong explicit compound confirmation phrases
+        val strongKeywords = (allPositiveKeywords.filter { kw ->
+            com.example.taptix.engine.AcceptVerifier.STRONG_CONFIRMATION_KEYWORDS.any { it.equals(kw, ignoreCase = true) }
+        } + com.example.taptix.engine.AcceptVerifier.STRONG_CONFIRMATION_KEYWORDS).distinct()
 
-        // Check for cancellation or expiry signals across the app screen tree (profile-specific + global)
-        val hasNegativeSignal = appRoots.any { root ->
-            findAnyKeywordInTree(root, negativeKeywords) != null
-        }
+        // Tier 2: Generic confirmation tokens (require corroborating contextual evidence)
+        val genericKeywords = (allPositiveKeywords.filter { kw ->
+            com.example.taptix.engine.AcceptVerifier.GENERIC_CONFIRMATION_KEYWORDS.any { it.equals(kw, ignoreCase = true) }
+        } + com.example.taptix.engine.AcceptVerifier.GENERIC_CONFIRMATION_KEYWORDS).distinct()
+
+        // Prohibited standalone navigation keywords
+        val navKeywords = com.example.taptix.engine.AcceptVerifier.PROHIBITED_STANDALONE_NAVIGATION_KEYWORDS
+
+        // Contextual evidence keywords
+        val contextualKeywords = com.example.taptix.engine.AcceptVerifier.CONTEXTUAL_EVIDENCE_KEYWORDS
+
+        val hasStrongPositive = appRoots.any { root -> findAnyKeywordInTree(root, strongKeywords) != null }
+        val hasGenericPositive = appRoots.any { root -> findAnyKeywordInTree(root, genericKeywords) != null }
+        val hasContextualEvidence = appRoots.any { root -> findAnyKeywordInTree(root, contextualKeywords) != null }
+        val hasNegativeSignal = appRoots.any { root -> findAnyKeywordInTree(root, negativeKeywords) != null }
+        val hasNavSignal = appRoots.any { root -> findAnyKeywordInTree(root, navKeywords) != null }
 
         val outcome = if (roots.isEmpty() || appRoots.isEmpty()) {
             com.example.taptix.engine.AcceptOutcome.UNKNOWN
         } else {
-            com.example.taptix.engine.AcceptVerifier.evaluate(
+            com.example.taptix.engine.AcceptVerifier.evaluateTiered(
                 acceptButtonStillVisible = isButtonStillVisible,
-                positiveConfirmationPresent = hasPositiveConfirmation,
-                negativeOrCancelledPresent = hasNegativeSignal
+                hasStrongPositive = hasStrongPositive,
+                hasGenericPositive = hasGenericPositive,
+                hasContextualEvidence = hasContextualEvidence,
+                hasNegativeOrCancelled = hasNegativeSignal,
+                hasStandaloneNavOnly = hasNavSignal && !hasStrongPositive && !hasGenericPositive
             )
         }
 
@@ -5972,7 +5987,8 @@ class AutoClickService : AccessibilityService() {
                     isButtonEnabled = isButtonEnabled,
                     isForegroundTargetApp = appRoots.isNotEmpty(),
                     hasNegativeSignal = hasNegativeSignal,
-                    hasPositiveConfirmation = hasPositiveConfirmation
+                    hasPositiveConfirmation = (hasStrongPositive || (hasGenericPositive && hasContextualEvidence)),
+                    initialClickMethod = clickMethod
                 )
 
                 val currentGen = com.example.taptix.automation.safety.AutomationSafetyController.currentGeneration
@@ -5995,9 +6011,12 @@ class AutoClickService : AccessibilityService() {
 
                 val unconfirmedReason = when {
                     hasNegativeSignal -> "Offer expired or cancelled by passenger/platform"
+                    hasNavSignal && !hasStrongPositive && !hasGenericPositive -> "Navigation screen alone detected; cannot independently confirm acceptance (Mandatory Safety Rule 1)"
+                    hasGenericPositive && !hasContextualEvidence -> "Generic confirmation detected without corroborating contextual evidence (Mandatory Safety Rule 2)"
                     isButtonStillVisible && !isButtonEnabled -> "First click processing; button disabled (avoided duplicate action)"
                     isButtonStillVisible -> "Button remained visible after tap/retry — not confirmed"
-                    !hasPositiveConfirmation -> "Booking popup closed without positive acceptance confirmation"
+                    clickMethod == com.example.taptix.engine.ClickMethod.UNKNOWN_DISPATCH -> "Direct click outcome uncertain (UNKNOWN) and no confirmation appeared; terminated safely"
+                    !hasStrongPositive && !hasGenericPositive -> "Booking popup closed without positive acceptance confirmation"
                     else -> "Acceptance could not be verified"
                 }
 
@@ -6261,7 +6280,9 @@ class AutoClickService : AccessibilityService() {
                 // Target must be visible, enabled, in partner app foreground, with bounds on screen.
                 val isTargetValid = targetNode.isVisibleToUser && targetNode.isEnabled
                 val isForegroundValid = (rootNode.packageName?.toString() ?: "").equals(appPkg, ignoreCase = true)
-                if (isTargetValid && isForegroundValid) {
+                val isBoundsValid = com.example.taptix.engine.BookingDetectionValidator.isValidButtonBounds(finalRect.width(), finalRect.height())
+                val isSafetyPermitted = com.example.taptix.automation.safety.AutomationSafetyController.canExecuteAction(actionGen)
+                if (isTargetValid && isForegroundValid && isBoundsValid && isSafetyPermitted) {
                     com.example.taptix.engine.DirectClickResult.FAILED_CONFIRMED_NOT_DISPATCHED
                 } else {
                     com.example.taptix.engine.DirectClickResult.UNKNOWN
