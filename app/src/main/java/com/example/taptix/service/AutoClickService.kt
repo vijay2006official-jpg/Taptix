@@ -3111,7 +3111,7 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        this.targetPoints = targets
+        this.targetPoints = targets.toList()
 
 
 
@@ -3271,7 +3271,7 @@ class AutoClickService : AccessibilityService() {
 
 
 
-        this.targetPoints = targets
+        this.targetPoints = targets.toList()
 
 
 

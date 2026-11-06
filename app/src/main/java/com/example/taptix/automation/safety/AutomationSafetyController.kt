@@ -72,10 +72,14 @@ object AutomationSafetyController {
         if (latched) {
             currentState.set(AutomationSafetyState.OFF)
             logI("Initialized in latched STOP state. Automation remains OFF.")
+            notifyStateChanged(AutomationSafetyState.OFF)
         } else {
-            currentState.set(AutomationSafetyState.OFF)
+            // Preserve ON state if service is already actively running (e.g. Activity recreation)
+            if (currentState.get() != AutomationSafetyState.ON) {
+                currentState.set(AutomationSafetyState.OFF)
+                notifyStateChanged(AutomationSafetyState.OFF)
+            }
         }
-        notifyStateChanged(currentState.get())
     }
 
     /**

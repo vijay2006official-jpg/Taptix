@@ -78,12 +78,16 @@
             android:label="Taptix Master Toggle">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.example.taptix.ACTION_TOGGLE_MASTER" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/taptix_widget_info" />
         </receiver>
+
+        <!-- Internal Non-Exported Widget Action Receiver (Blocked from External Apps) -->
+        <receiver
+            android:name=".widget.TaptixWidgetActionReceiver"
+            android:exported="false" />
 
         <service
             android:name=".service.TaptixTileService"

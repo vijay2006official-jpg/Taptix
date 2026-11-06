@@ -930,12 +930,16 @@ class OverlayService : Service() {
             if (!Settings.canDrawOverlays(context)) return
             PreferencesRepository(context).saveFloatingDockEnabled(true)
             val intent = Intent(context, OverlayService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                instance?.showOverlay()
+            } catch (e: Exception) {
+                Log.w("OverlayService", "Could not start overlay foreground service: ${e.message}")
             }
-            instance?.showOverlay()
         }
 
         fun hideService(context: Context) {

@@ -653,6 +653,13 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
         refreshDiagnostics()
 
     }
+        val notificationLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            isNotificationOn = granted || (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)
+            refreshDiagnostics()
+        }
+
 
 
 
@@ -1200,6 +1207,11 @@ fun TaptixMainScreen(prefsRepo: PreferencesRepository) {
 
                     },
 
+                    DiagnosticItem("Alert Notifications", "Required for Emergency STOP notification in driver status bar", isNotificationOn) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !isNotificationOn) {
+                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
                     DiagnosticItem("Battery Exemption", "Prevents OEM systems from pausing background helper", isBatteryOptIgnored) {
 
                         showBatteryGuidance = true

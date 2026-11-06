@@ -30,15 +30,12 @@ class TaptixWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TOGGLE_MASTER) {
-            // Security: widgets use FLAG_IMMUTABLE PendingIntents so external apps cannot
-            // easily forge them, but as defense-in-depth we also ignore intents that carry
-            // a spoofed package name extra that doesn't match our own.
-            val senderPkg = intent.getStringExtra("android.intent.extra.PACKAGE_NAME")
-            if (senderPkg != null && senderPkg != context.packageName) {
-                Log.w("TaptixWidget", "Rejected toggle from unknown sender: senderPkg")
-                return
-            }
+    }
+
+    companion object {
+        const val ACTION_TOGGLE_MASTER = "com.example.taptix.ACTION_TOGGLE_MASTER"
+
+        fun handleToggleMaster(context: Context) {
             val prefs = PreferencesRepository(context)
             val currentSettings = prefs.getSettings()
             val newState = !currentSettings.masterControlEnabled
@@ -58,10 +55,6 @@ class TaptixWidgetProvider : AppWidgetProvider() {
 
             notifyStateChanged(context)
         }
-    }
-
-    companion object {
-        const val ACTION_TOGGLE_MASTER = "com.example.taptix.ACTION_TOGGLE_MASTER"
 
         fun notifyStateChanged(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
@@ -95,8 +88,8 @@ class TaptixWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_profile, openMapPending)
 
-            // Toggle on button click
-            val toggleIntent = Intent(context, TaptixWidgetProvider::class.java).apply {
+            // Toggle on button click via internal non-exported receiver
+            val toggleIntent = Intent(context, TaptixWidgetActionReceiver::class.java).apply {
                 action = ACTION_TOGGLE_MASTER
             }
             val togglePending = PendingIntent.getBroadcast(
